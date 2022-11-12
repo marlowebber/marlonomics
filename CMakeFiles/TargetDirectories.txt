@@ -1,0 +1,3 @@
+/home/marlo/Documents/Marlonomics/marlonomics/CMakeFiles/game.dir
+/home/marlo/Documents/Marlonomics/marlonomics/CMakeFiles/edit_cache.dir
+/home/marlo/Documents/Marlonomics/marlonomics/CMakeFiles/rebuild_cache.dir
