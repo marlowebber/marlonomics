@@ -29,6 +29,18 @@ float RNG()
 }
 
 
+float clamp (float in, float min, float max)
+{
+	if (in < min)
+	{
+		return min;
+	}
+	else if (in > max)
+	{
+		return max;
+	}
+	return in;
+}
 
 
 const float maximum_like = 1.0f;
@@ -54,16 +66,14 @@ const int n_trade_goods = 8;
 const int map_x = 80;
 const int map_y = 24;
 
-struct Archetype
-{
-	float cute;
-	float tough;
-	float funny;
-	float smart;
-};
 
 
+#define CUTE 1
+#define FUNNY 2
+#define SMART 3
+#define TOUGH 4
 
+const int n_characteristics = 4;
 
 
 std::string names[] =
@@ -94,8 +104,8 @@ struct Citizen
 	int position_x;
 	int position_y;
 
-	Archetype personality;
-	Archetype ideals;
+	float personality[n_characteristics];
+	float ideals[n_characteristics];
 
 	char icon;
 
@@ -126,18 +136,14 @@ struct Citizen
 		}
 		for (int i = 0; i < population_size; ++i)
 		{
-			this->likes[i] = (RNG()-0.5f) * 2.0f;
+			this->likes[i] = (RNG() - 0.5f) * 2.0f;
 			this->knows[i] = 0.0f;
 		}
-		this->personality.cute = RNG();
-		this->personality.tough = RNG();
-		this->personality.funny = RNG();
-		this->personality.smart = RNG();
-
-		this->ideals.cute = RNG();
-		this->ideals.tough = RNG();
-		this->ideals.funny = RNG();
-		this->ideals.smart = RNG();
+		for (int i = 0; i < n_characteristics; ++i)
+		{
+			this->personality[i] = RNG();
+			this->ideals[i] = RNG();
+		}
 
 
 	}
@@ -297,6 +303,9 @@ void trade(int a, int b)
 		citizens[a].likes[b] += rep_adjustment_a;
 		citizens[a].likes[b] += rep_adjustment_b;
 
+		citizens[a].likes[b] = clamp(citizens[a].likes[b], -maximum_like, maximum_like);
+		citizens[b].likes[a] = clamp(citizens[b].likes[a], -maximum_like, maximum_like);
+
 
 
 		// they also remember each other as sources.
@@ -371,25 +380,35 @@ void trade(int a, int b)
 }
 
 
-float clamp (float in, float min, float max)
-{
-	if (in < min)
-	{
-		return min;
-	}
-	else if (in > max)
-	{
-		return max;
-	}
-	return in;
-}
 
-float gossip_const = 0.5f;
+float gossip_const = 0.25f;
+float hangout_influence = 0.1f;
 
 void gossip(int a, int b)
 {
 
 
+	float a_impression_b = 4.0f;
+	float b_impression_a = 4.0f;
+	for (int i = 0; i < n_characteristics; ++i)
+	{
+		a_impression_b -= citizens[a].ideals[i] - citizens[b].personality[i];
+		b_impression_a -= citizens[b].ideals[i] - citizens[a].personality[i];
+	}
+
+	a_impression_b *= hangout_influence;
+	b_impression_a *= hangout_influence;
+
+	citizens[a].likes[b] += a_impression_b;
+	citizens[b].likes[a] += b_impression_a;
+
+
+	citizens[a].likes[b] = clamp(citizens[a].likes[b], -maximum_like, maximum_like);
+	citizens[b].likes[a] = clamp(citizens[b].likes[a], -maximum_like, maximum_like);
+
+
+
+	printf("these two characters hang out and made impressions on each other: %f, %f\n", a_impression_b, b_impression_a);
 
 	// an initial impression is formed based on how each ascribes to the other's ideals.
 
@@ -472,17 +491,37 @@ void gossip(int a, int b)
 			float how_much_b_likes_a = (citizens[b].likes[a] / maximum_like);
 
 
-			float a_and_b_disagree =  how_much_a_likes_c - how_much_b_likes_c  ; 
-
-			// if someone says something, you agree with them if you know them, and disagree if you know the other person
-			float a_rep_b = -a_and_b_disagree * how_much_a_likes_c * gossip_const;
-			float b_rep_a = a_and_b_disagree * how_much_b_likes_c * gossip_const;
+			// float a_and_b_disagree_amount =  how_much_a_likes_c - how_much_b_likes_c  ;
 
 
-			float a_rep_c = -a_and_b_disagree * how_much_a_likes_b * gossip_const;
-			float b_rep_c = a_and_b_disagree * how_much_b_likes_a * gossip_const;
+			// float a_and_b_disagree_sign = 1.0f;
+			// if (how_much_a_likes_c * how_much_b_likes_c < 0.0f )
+			// {
+			// 	a_and_b_disagree_sign = -1.0f;
+			// }
 
 
+			// float a_and_b_disagree = how_much_a_likes_c * how_much_b_likes_c ;
+
+
+			// how much more A likes B after the interaction.
+			float a_rep_b = how_much_b_likes_c  * how_much_a_likes_c * gossip_const;
+			float b_rep_a = how_much_a_likes_c  * how_much_b_likes_c * gossip_const;
+
+
+			float b_rep_c  =  how_much_a_likes_c  * how_much_b_likes_a  * gossip_const;
+			float a_rep_c  =  how_much_b_likes_c  * how_much_a_likes_b * gossip_const;
+
+			// if (how_much_a_likes_c * how_much_b_likes_c < 0.0f)
+			// {
+			// 	// the signs are not the same
+			// 	a_rep_b *= -1.0f;
+			// 	b_rep_a *= -1.0f;
+			// }
+
+
+
+			// this still doesn't work quite
 
 
 
@@ -580,6 +619,9 @@ void gossip(int a, int b)
 			citizens[b].likes[c] = clamp(citizens[b].likes[c], -maximum_like, maximum_like);
 
 
+
+
+
 			// // how this works is:
 			// // citizen A and B state how much they like C.
 			// // they both change their opinions of C based on how much they like each other.
@@ -606,7 +648,10 @@ void gossip(int a, int b)
 			break; // only talk about one person.
 		}
 	}
+
+
 }
+
 
 
 
