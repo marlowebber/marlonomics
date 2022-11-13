@@ -16,6 +16,7 @@ find_package(Boost REQUIRED COMPONENTS filesystem thread)
 # Define the framework files.
 set(SRCS
 	src/marlonomics.cpp
+	name-generator/dasmig/namegen.hpp
 )
 
 link_directories(

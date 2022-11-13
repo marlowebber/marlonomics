@@ -10,6 +10,7 @@
 #include <chrono>
 #include <thread>
 
+
 uint32_t za = 521288629;
 uint32_t xorshift32()
 {
@@ -26,6 +27,11 @@ float RNG()
 	static std::uniform_real_distribution<> dis(0, 1);
 	return dis(randomizer);
 }
+
+
+
+
+const float maximum_like = 1.0f;
 
 
 const int population_size = 100;
@@ -60,6 +66,17 @@ struct Archetype
 
 
 
+std::string names[] =
+{
+	std::string("Brandon"),
+	std::string("Kyle"),
+	std::string("Keith"),
+	std::string("Joel"),
+	std::string("Brandon"),
+};
+
+
+
 
 const unsigned int name_length = 16;
 
@@ -85,6 +102,10 @@ struct Citizen
 	bool traded_this_turn;
 	bool chatted_this_turn;
 
+	std::string name;
+
+
+
 	Citizen()
 	{
 
@@ -100,12 +121,12 @@ struct Citizen
 			this->prices[i] = 1.0f;
 			this->owned_items[i] = xorshift32() % 3;
 			this->needs[i] = 1;
-			this->sources[i] = xorshift32() % population_size;
+			this->sources[i] = -1;
 			this->source_prices[i] = 1.0f;
 		}
 		for (int i = 0; i < population_size; ++i)
 		{
-			this->likes[i] = 0.0f;
+			this->likes[i] = (RNG()-0.5f) * 2.0f;
 			this->knows[i] = 0.0f;
 		}
 		this->personality.cute = RNG();
@@ -350,10 +371,47 @@ void trade(int a, int b)
 }
 
 
+float clamp (float in, float min, float max)
+{
+	if (in < min)
+	{
+		return min;
+	}
+	else if (in > max)
+	{
+		return max;
+	}
+	return in;
+}
+
 float gossip_const = 0.5f;
 
 void gossip(int a, int b)
 {
+
+
+
+	// an initial impression is formed based on how each ascribes to the other's ideals.
+
+	// if (citizens[a].knows[b] == 0)
+	// {
+	// 	float initial_impression = 1.0;
+	// 	initial_impression -= ( citizens[a].ideals.cute  - citizens[b].personality.cute )  * 0.5f;
+	// 	initial_impression -= ( citizens[a].ideals.funny - citizens[b].personality.funny ) * 0.5f;
+	// 	initial_impression -= ( citizens[a].ideals.tough - citizens[b].personality.tough ) * 0.5f;
+	// 	initial_impression -= ( citizens[a].ideals.smart - citizens[b].personality.smart ) * 0.5f;
+	// 	citizens[a].likes[b] = initial_impression;
+	// }
+
+	// if (citizens[b].knows[a] == 0)
+	// {
+	// 	float initial_impression = 1.0;
+	// 	initial_impression -= ( citizens[b].ideals.cute  - citizens[a].personality.cute )  * 0.5f;
+	// 	initial_impression -= ( citizens[b].ideals.funny - citizens[a].personality.funny ) * 0.5f;
+	// 	initial_impression -= ( citizens[b].ideals.tough - citizens[a].personality.tough ) * 0.5f;
+	// 	initial_impression -= ( citizens[b].ideals.smart - citizens[a].personality.smart ) * 0.5f;
+	// 	citizens[b].likes[a] = initial_impression;
+	// }
 
 
 
@@ -392,61 +450,156 @@ void gossip(int a, int b)
 	{
 
 		int person_to_discuss = (random_start + i) % population_size;
-		if (
-		    abs( citizens[a].likes[person_to_discuss] ) > 0.0f
-		    || abs(citizens[b].likes[person_to_discuss]  ) > 0.0f
-		)
+		if ((
+		            abs( citizens[a].likes[person_to_discuss] ) > 0.0f
+		            || abs(citizens[b].likes[person_to_discuss]  ) > 0.0f
+		        )
+		        && person_to_discuss != a && person_to_discuss != b
+		   )
 		{
 
+			int c = person_to_discuss;
 
-		citizens[a].chatted_this_turn = true;
-		citizens[b].chatted_this_turn = true;
-
-
-			float rep_adjustment_a =
-
-			    // the adjustment is the difference in the people's opinion
-			    (citizens[b].likes[person_to_discuss] -  citizens[a].likes[person_to_discuss])
-
-			    // multiplied by how much this person likes the person they're talking to, and by how much this person can be influenced in general.
-			    * (citizens[a].likes[b]) * gossip_const;
-
-			float rep_adjustment_b = (citizens[a].likes[person_to_discuss] -  citizens[b].likes[person_to_discuss])
-			                         * (citizens[b].likes[a]) * gossip_const;
-
-			// printf("%i and %i talked about %i. They like each other %f, %f.\nThey like the person they discussed %f, %f. Their opinions of this person changed by %f and %f\n",
-			//        a, b, person_to_discuss, citizens[a].likes[b], citizens[b].likes[a],
-			//        citizens[a].likes[person_to_discuss], citizens[b].likes[person_to_discuss], rep_adjustment_a, rep_adjustment_b);
-
-			citizens[a].likes[person_to_discuss] += rep_adjustment_a;
-			citizens[b].likes[person_to_discuss] += rep_adjustment_b;
+			citizens[a].chatted_this_turn = true;
+			citizens[b].chatted_this_turn = true;
 
 
+			float how_much_a_likes_c = (citizens[a].likes[c] / maximum_like);
+			float how_much_b_likes_c = (citizens[b].likes[c] / maximum_like);
 
 
+			float how_much_a_likes_b = (citizens[a].likes[b] / maximum_like);
+			float how_much_b_likes_a = (citizens[b].likes[a] / maximum_like);
 
-			// how this works is:
-			// citizen A and B state how much they like C.
-			// they both change their opinions of C based on how much they like each other.
 
-			// they both change their opinions of each other based on how much they like C.
+			float a_and_b_disagree =  how_much_a_likes_c - how_much_b_likes_c  ; 
 
-			rep_adjustment_a =  (citizens[b].likes[person_to_discuss] -  citizens[a].likes[person_to_discuss]) *  citizens[a].likes[person_to_discuss]  * gossip_const;
-			rep_adjustment_b =  (citizens[a].likes[person_to_discuss] -  citizens[b].likes[person_to_discuss]) *  citizens[b].likes[person_to_discuss]  * gossip_const;
+			// if someone says something, you agree with them if you know them, and disagree if you know the other person
+			float a_rep_b = -a_and_b_disagree * how_much_a_likes_c * gossip_const;
+			float b_rep_a = a_and_b_disagree * how_much_b_likes_c * gossip_const;
 
-			citizens[a].likes[b] += rep_adjustment_a;
-			citizens[b].likes[a] += rep_adjustment_b;
 
-			// printf("their opinions of each other changed by %f and %f\n", rep_adjustment_a, rep_adjustment_b);
+			float a_rep_c = -a_and_b_disagree * how_much_a_likes_b * gossip_const;
+			float b_rep_c = a_and_b_disagree * how_much_b_likes_a * gossip_const;
 
 
 
-			citizens[a].knows[b] += 1.0f;
-			citizens[b].knows[a] += 1.0f;
 
 
-			citizens[a].knows[person_to_discuss] += 1.0f;
-			citizens[b].knows[person_to_discuss] += 1.0f;
+			// working example.
+
+			/*
+
+			a likes b = 100;
+
+			b likes a = 10;
+
+
+			a likes c = 20
+
+			b likes c = 70;
+
+
+			does a care what b thinks?
+
+			yeah.
+
+			does b care about what a thinks?
+
+			no.
+
+			does a like c ?
+
+			no.
+
+			does b like c ?
+
+			hell yeah.
+
+
+
+
+
+			how does a opinion of c change?
+			a likes c a lot more.
+
+
+			how does a opinion of b change?
+			a likes b a little bit more.
+
+
+
+			how does b opinion of a change?
+			b opinion of a gets a bit worse because a doesn't like C as much as b.
+
+
+
+			how does b opinion of c change?
+			b opinion of c gets a tiny bit worse, but not much because
+
+
+			*/
+
+
+
+
+
+
+			// float rep_adjustment_a =
+
+			//     (citizens[b].likes[person_to_discuss] -  citizens[a].likes[person_to_discuss])   *  (citizens[a].likes[b]) * gossip_const;
+
+			// float rep_adjustment_b = (citizens[a].likes[person_to_discuss] -  citizens[b].likes[person_to_discuss])
+			//                          * (citizens[b].likes[a])    * gossip_const;
+
+			printf("%i and %i talked about %i. They like each other %f, %f.\nThey like the person they discussed %f, %f. Their opinions of this person changed by %f and %f\n",
+			       a, b, c, citizens[a].likes[b], citizens[b].likes[a], citizens[a].likes[c], citizens[b].likes[c],
+			       a_rep_c, b_rep_c);
+
+
+			printf("their opinions of each other changed by %f and %f\n", a_rep_b, b_rep_a);
+
+
+			// citizens[a].likes[person_to_discuss] += rep_adjustment_a;
+			// citizens[b].likes[person_to_discuss] += rep_adjustment_b;
+
+
+			printf("\n");
+
+
+			citizens[a].likes[b] += a_rep_b;
+			citizens[a].likes[c] += a_rep_c;
+
+			citizens[b].likes[a] += b_rep_a;
+			citizens[b].likes[c] += b_rep_c;
+
+
+			citizens[a].likes[b] = clamp(citizens[a].likes[b], -maximum_like, maximum_like);
+			citizens[a].likes[c] = clamp(citizens[a].likes[c], -maximum_like, maximum_like);
+			citizens[b].likes[a] = clamp(citizens[b].likes[a], -maximum_like, maximum_like);
+			citizens[b].likes[c] = clamp(citizens[b].likes[c], -maximum_like, maximum_like);
+
+
+			// // how this works is:
+			// // citizen A and B state how much they like C.
+			// // they both change their opinions of C based on how much they like each other.
+
+			// // they both change their opinions of each other based on how much they like C.
+
+			// rep_adjustment_a =  (citizens[b].likes[person_to_discuss] -  citizens[a].likes[person_to_discuss]) *  citizens[a].likes[person_to_discuss]  * gossip_const;
+			// rep_adjustment_b =  (citizens[a].likes[person_to_discuss] -  citizens[b].likes[person_to_discuss]) *  citizens[b].likes[person_to_discuss]  * gossip_const;
+
+			// citizens[a].likes[b] += rep_adjustment_a;
+			// citizens[b].likes[a] += rep_adjustment_b;
+
+
+
+			// citizens[a].knows[b] += 1.0f;
+			// citizens[b].knows[a] += 1.0f;
+
+
+			// citizens[a].knows[person_to_discuss] += 1.0f;
+			// citizens[b].knows[person_to_discuss] += 1.0f;
 
 
 
@@ -469,9 +622,9 @@ void get_new_stuff(int a)
 
 
 
-const float eat_per_turn = 0.1f;
-const float drink_per_turn = 0.2f;
-const float smoke_per_turn = 0.5f;
+const float eat_per_turn = 0.01f;
+const float drink_per_turn = 0.02f;
+const float smoke_per_turn = 0.05f;
 
 void eat_breathe_etc(int a)
 {
@@ -479,28 +632,32 @@ void eat_breathe_etc(int a)
 	if (citizens[a].owned_items[SNACKS] > eat_per_turn)
 	{
 		citizens[a].owned_items[SNACKS] -= eat_per_turn;
+		citizens[a].needs[SNACKS] = 0;
 	}
 	else
 	{
-		citizens[a].needs[SNACKS] = eat_per_turn;
+		citizens[a].needs[SNACKS] = 1;
 	}
 
 	if (citizens[a].owned_items[SMOKES] > smoke_per_turn)
 	{
 		citizens[a].owned_items[SMOKES] -= smoke_per_turn;
+
+		citizens[a].needs[SMOKES] = 0;
 	}
 	else
 	{
-		citizens[a].needs[SMOKES] = smoke_per_turn;
+		citizens[a].needs[SMOKES] = 1;
 	}
 
 	if (citizens[a].owned_items[BOOZE] > drink_per_turn)
 	{
 		citizens[a].owned_items[BOOZE] -= drink_per_turn;
+		citizens[a].needs[BOOZE] = 0;
 	}
 	else
 	{
-		citizens[a].needs[BOOZE] = drink_per_turn;
+		citizens[a].needs[BOOZE] = 1;
 	}
 
 
@@ -538,46 +695,103 @@ void update_position_based_on_needs(int a)
 	// what is the biggest need?
 	int biggest_need = NONE;
 	float need_amount = 0.0f;
+	int biggest_need_source = -1;
+
+
+	int destination_x;
+	int destination_y;
+	bool go = false;
 
 	for (int i = 0; i < n_trade_goods; ++i)
 	{
-		if (citizens[a].needs[i] > need_amount)
+		if (citizens[a].needs[i] > need_amount
+		        && citizens[a].sources[i] > -1
+		   )
 		{
 			biggest_need = i;
 			need_amount = citizens[a].needs[i];
+			biggest_need_source = citizens[a].sources[i];
 		}
 	}
 
 	// where are the known sources of this?
-	int source = citizens[a].sources[biggest_need];
+	if (biggest_need_source != NONE && biggest_need_source > -1)
+	{
+		destination_x = citizens[  biggest_need_source ].position_x;
+		destination_y = citizens[  biggest_need_source ].position_y;
+		go = true;
 
-	if (source == NONE || source == -1) { return; }
+	}
+
+	else
+	{
+
+
+		// if there is no known source for the thing you need, go hang out with a friend
+
+		int best_friend = -1;
+		float likes_best_friend = 0.0f;
+		for (int i = 0; i < population_size; ++i)
+		{
+			if (citizens[a].likes[i] > likes_best_friend)
+			{
+				best_friend = i;
+				likes_best_friend = citizens[a].likes[i];
+			}
+		}
+
+		if (best_friend > -1)
+		{
+			destination_x = citizens[best_friend].position_x;
+			destination_y = citizens[best_friend].position_y;
+			go = true;
+		}
+
+
+
+	}
+
+
+
+
+
+
+
+
 
 	// go there
-	int source_y = citizens[source].position_x;
+	if (go)
+	{
+		if (destination_x > citizens[a].position_x)
+		{
+			citizens[a].position_x++;
+		}
+		else if (destination_x < citizens[a].position_x)
+		{
+			citizens[a].position_x--;
+		}
 
-	if (citizens[source].position_x > citizens[a].position_x)
-	{
-		citizens[a].position_x++;
-	}
-	else if (citizens[source].position_x < citizens[a].position_x)
-	{
-		citizens[a].position_x--;
+
+		if (destination_y > citizens[a].position_y)
+		{
+			citizens[a].position_y++;
+		}
+		else if (destination_y < citizens[a].position_y)
+		{
+			citizens[a].position_y--;
+		}
+
 	}
 
+	else
+	{
 
-	if (citizens[source].position_y > citizens[a].position_y)
-	{
-		citizens[a].position_y++;
-	}
-	else if (citizens[source].position_y < citizens[a].position_y)
-	{
-		citizens[a].position_y--;
+		citizens[a].position_x += (xorshift32() % 3) - 1;
+		citizens[a].position_y += (xorshift32() % 3) - 1;
 	}
 
 
 }
-
 
 
 
@@ -596,6 +810,7 @@ void update()
 			int k = (random_start + j) % population_size;
 			if (citizens[i].position_x == citizens[k].position_x
 			        && citizens[i].position_y == citizens[k].position_y
+			        && k != i
 			   )
 			{
 				met_with = k;
