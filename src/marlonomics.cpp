@@ -63,7 +63,6 @@ const float maximum_like = 1.0f;
 # define FILTERS 7
 # define LIGHTER 8
 
-
 const static std::string item_names[] =
 {
 	std::string("none"),
@@ -90,6 +89,9 @@ const int map_y = 24;
 
 const int n_characteristics = 5;
 
+#define SAID_SOMETHING 1
+#define DID_SOMETHING  2
+#define TRADE_DEAL     3
 
 bool print_chatter = true;
 bool print_trade = true;
@@ -221,15 +223,47 @@ std::string location_names[] =
 	std::string("The Valley"),
 };
 
-
 const int n_location_names = 4;
 const int pc = n_location_names; // index of player character
 
-
 const unsigned int name_length = 16;
 
-
 const int population_size = n_person_names + n_location_names;
+
+
+
+// std::string float_to_string_very(float in)
+// {
+
+
+
+// 	if (in >0.9f)
+// 	{
+// 		return std::string("")
+// 	}
+// 	else if (in > 0.65f)
+// 	{
+
+// 	}
+// 	else if (in > 0.65f)
+// 	{
+
+// 	}
+// 	else if (in > 0.65f)
+// 	{
+
+// 	}
+// 	else if (in > 0.65f)
+// 	{
+
+// 	}
+// 	else if (in > 0.65f)
+// 	{
+
+// 	}
+
+// }
+
 
 
 
@@ -254,6 +288,11 @@ char suggest_icon()
 
 }
 
+
+
+
+
+
 struct Citizen
 {
 	float owned_items[n_trade_goods];
@@ -261,6 +300,7 @@ struct Citizen
 	float needs[n_trade_goods];
 	float likes[population_size];
 	float knows[population_size];
+	float owes[population_size];
 
 	int sources[n_trade_goods];
 	float source_prices[n_trade_goods];
@@ -331,12 +371,92 @@ Citizen citizens[population_size];
 
 
 
+const float eat_per_turn = 0.001f;
+const float drink_per_turn = 0.002f;
+const float smoke_per_turn = 0.005f;
+
+void eat_breathe_etc(int a)
+{
+	if (citizens[a].owned_items[SNACKS] > 0)
+	{
+		if (RNG() < eat_per_turn)
+		{
+			if (print_crafting  && (pac || (a == pc))  )
+			{
+				printf("%s ate a snack\n", citizens[a].name.c_str());
+			}
+			citizens[a].owned_items[SNACKS] -= 1;
+		}
+	}
+
+	if (citizens[a].owned_items[SMOKES] > 0
+	        && citizens[a].owned_items[LIGHTER] > 0
+	   )
+	{
+		if (RNG() < smoke_per_turn)
+		{
+			if (print_crafting  && (pac || (a == pc)))
+			{
+				printf("%s smoked a cigarette\n", citizens[a].name.c_str());
+			}
+			citizens[a].owned_items[SMOKES] -= 1;
+			citizens[a].owned_items[LIGHTER] -= 1;
+		}
+	}
+
+	if (citizens[a].owned_items[BOOZE] > 0)
+	{
+		if (RNG() < drink_per_turn)
+		{
+			if (print_crafting  && (pac || (a == pc)))
+			{
+				printf("%s drank a drink\n", citizens[a].name.c_str());
+			}
+			citizens[a].owned_items[BOOZE] -= 1;
+		}
+	}
+}
+
+
+
+
+
+
+
+
+void needs_controller(int a)
+{
+
+	for (int i = 0; i < n_trade_goods; ++i)
+	{
+		citizens[a].needs[i] = 0.0;
+	}
+
+	for (int i = 0; i < n_trade_goods; ++i)
+	{
+		for (int j = 0; j < population_size; ++j)
+		{
+			citizens[a].needs[i] += citizens[a].owes[i];
+		}
+	}
+
+
+	// if you need something which can be made from component parts, compile a list of those parts and seek them out.
+
+
+	eat_breathe_etc(a);
+
+
+}
+
 
 
 
 // one person asks another to sell them an item, and the other person makes a series of offers, the best of which is chosen.
 void trade(int a, int b, int a_wants_most, float how_much_a_wants)
 {
+
+
 	if (a_wants_most == NONE || how_much_a_wants <= 0.0f) {return;}
 	if (citizens[b].owned_items[a_wants_most] > 0.0f)
 	{
@@ -366,11 +486,13 @@ void trade(int a, int b, int a_wants_most, float how_much_a_wants)
 		float how_much_b_thinks_the_offer_is_worth = how_much_a_wants * citizens[b].prices[a_wants_most];
 
 
+		float rep_adjusted_price_b = how_much_b_thinks_the_offer_is_worth / (citizens[a].likes[b] + 1.0f) ;
+
 		float offers[n_trade_goods];
 
 		for (int i = 0; i < n_trade_goods; ++i)
 		{
-			offers[i] = how_much_b_thinks_the_offer_is_worth / citizens[b].prices[i] ;
+			offers[i] = rep_adjusted_price_b / citizens[b].prices[i] ;
 
 			if (offers[i] > (citizens[a].owned_items[i])) // it's not going to work if you can't supply the entire quantity.
 			{
@@ -472,10 +594,10 @@ void trade(int a, int b, int a_wants_most, float how_much_a_wants)
 			citizens[b].owned_items[a_wants_most] -= how_much_a_wants;//what_b_has_that_a_wants[a_wants_most];
 			citizens[a].owned_items[a_wants_most] += how_much_a_wants;//what_b_has_that_a_wants[a_wants_most];
 
-			// if the other's portion is more or less than what was expected, there is a reputation adjustment. Bigger deals have a bigger impact.
-			// how much you got - how much you expected to get
-			float rep_adjustment_a =  fast_sigmoid( (offers[b_wants_most] - how_much_a_thinks_the_offer_is_worth) * trade_const )  ;//how_much_a_thinks_the_offer_is_worth - (citizens[a].prices[a_wants_most] * how_much_a_wants); //what_b_has_that_a_wants[a_wants_most]);
+			// the rep adjustment is basically just how much you think you profited
 
+			float rep_adjustment_a =  fast_sigmoid( (  (offers[b_wants_most] * citizens[a].prices[b_wants_most]) - (how_much_a_wants * citizens[a].prices[a_wants_most])) * trade_const )  ; //how_much_a_thinks_the_offer_is_worth - (citizens[a].prices[a_wants_most] * how_much_a_wants); //what_b_has_that_a_wants[a_wants_most]);
+			float rep_adjustment_b =  fast_sigmoid( ( (how_much_a_wants *  citizens[b].prices[a_wants_most] )   - (offers[b_wants_most] *  citizens[b].prices[b_wants_most])) * trade_const )  ;//how_much_a_thinks_the_offer_is_worth - (citizens[a].prices[a_wants_most] * how_much_a_wants); //what_b_has_that_a_wants[a_wants_most]);
 
 
 
@@ -506,52 +628,6 @@ void trade(int a, int b, int a_wants_most, float how_much_a_wants)
 				citizens[a].sources[a_wants_most] = b;
 				citizens[a].source_prices[a_wants_most] = citizens[b].prices[a_wants_most];
 			}
-
-			// if (price_point_from_a_to_b < citizens[b].source_prices[b_wants_most])
-			// {
-			// 	citizens[b].sources[b_wants_most] = a;
-			// 	citizens[b].source_prices[b_wants_most] = price_point_from_a_to_b;
-			// }
-
-
-
-
-
-			// // citizens adjust their prices to meet the market demands.
-			// if (price_point_from_b_to_a > citizens[a].prices[a_wants_most])
-			// {
-			// 	citizens[a].prices[a_wants_most] *= 1.1f;
-			// }
-			// else
-			// {
-			// 	citizens[a].prices[a_wants_most] *= 0.9f;
-			// }
-			// if (price_point_from_a_to_b > citizens[a].prices[b_wants_most])
-			// {
-			// 	citizens[a].prices[b_wants_most] *= 1.1f;
-			// }
-			// else
-			// {
-			// 	citizens[a].prices[b_wants_most] *= 0.9f;
-			// }
-
-			// if (price_point_from_a_to_b > citizens[b].prices[b_wants_most])
-			// {
-			// 	citizens[b].prices[b_wants_most] *= 1.1f;
-			// }
-			// else
-			// {
-			// 	citizens[b].prices[b_wants_most] *= 0.9f;
-			// }
-			// if (price_point_from_b_to_a > citizens[b].prices[a_wants_most])
-			// {
-			// 	citizens[b].prices[a_wants_most] *= 1.1f;
-			// }
-			// else
-			// {
-			// 	citizens[b].prices[a_wants_most] *= 0.9f;
-			// }
-
 
 
 		}
@@ -938,8 +1014,8 @@ void gossip(int a, int b)
 		printf("	 %s said something %s and %s thought it was %f. That made %s think %f of %s.\n",
 		       citizens[a].name.c_str(), characteristic_names[ a_does_something].c_str(),
 		       citizens[b].name.c_str(),  a_impression_b,
-		         citizens[a].name.c_str(),b_impression_a,
-		      citizens[b].name.c_str()
+		       citizens[a].name.c_str(), b_impression_a,
+		       citizens[b].name.c_str()
 		      );
 
 	}
@@ -1011,124 +1087,32 @@ void gossip(int a, int b)
 
 
 
-
-
-
-
-const float eat_per_turn = 0.001f;
-const float drink_per_turn = 0.002f;
-const float smoke_per_turn = 0.005f;
-
-void eat_breathe_etc(int a)
+void crafting(int a)
 {
 
-	if (citizens[a].owned_items[SNACKS] > 0)
+	if (citizens[a].needs[SMOKES] > 0)
 	{
+		if ( (citizens[a].owned_items[FILTERS] > 0 )
+		        && (citizens[a].owned_items[SPIN] > 0 )
+		        && (citizens[a].owned_items[PAPERS] > 0 ))
 
-		citizens[a].needs[SNACKS] = 0;
-		if (RNG() < eat_per_turn)
 		{
-			if (print_crafting  && (pac || (a == pc))  )
-			{
-				printf("%s ate a snack\n", citizens[a].name.c_str());
-			}
-			citizens[a].owned_items[SNACKS] -= 1;
-		}
-	}
-	else
-	{
-		citizens[a].needs[SNACKS] = 1;
-	}
-
-	if (citizens[a].owned_items[SMOKES] > 0
-	        && citizens[a].owned_items[LIGHTER] > 0
-	   )
-	{
-
-		citizens[a].needs[SMOKES] = 1;
-		citizens[a].needs[LIGHTER] = 1;
-		if (RNG() < smoke_per_turn)
-		{
+			citizens[a].owned_items[FILTERS] -= 1;
+			citizens[a].owned_items[SPIN] -= 1;
+			citizens[a].owned_items[PAPERS] -= 1;
+			citizens[a].owned_items[SMOKES] += 1;
 			if (print_crafting  && (pac || (a == pc)))
 			{
-				printf("%s smoked a cigarette\n", citizens[a].name.c_str());
+				printf("%s rolled a smoke\n", citizens[a].name.c_str());
 			}
-			citizens[a].owned_items[SMOKES] -= 1;
-			citizens[a].owned_items[LIGHTER] -= 1;
-		}
-
-	}
-	else
-	{
-		if (citizens[a].owned_items[SMOKES] < 1)
-		{
-			citizens[a].needs[SMOKES] = 1;
-		}
-
-		if (citizens[a].owned_items[LIGHTER] < 1)
-		{
-			citizens[a].needs[LIGHTER] = 1;
 		}
 	}
-
-	if (citizens[a].owned_items[BOOZE] > 0)
-	{
-
-		citizens[a].needs[BOOZE] = 1;
-		if (RNG() < drink_per_turn)
-		{
-			if (print_crafting  && (pac || (a == pc)))
-			{
-				printf("%s drank a drink\n", citizens[a].name.c_str());
-			}
-			citizens[a].owned_items[BOOZE] -= 1;
-		}
-	}
-	else
-	{
-		citizens[a].needs[BOOZE] = 1;
-	}
-
-
-
-
-
-
-
-
-
-
-	if ( (citizens[a].owned_items[FILTERS] > 0 )
-	        && (citizens[a].owned_items[SPIN] > 0 )
-	        && (citizens[a].owned_items[PAPERS] > 0 ))
-	{
-		citizens[a].owned_items[FILTERS] -= 1;
-		citizens[a].owned_items[SPIN] -= 1;
-		citizens[a].owned_items[PAPERS] -= 1;
-
-		citizens[a].owned_items[SMOKES] += 1;
-
-
-		citizens[a].needs[FILTERS] = 0;
-		citizens[a].needs[SPIN] = 0;
-		citizens[a].needs[PAPERS] = 0;
-		if (print_crafting  && (pac || (a == pc)))
-		{
-			printf("%s rolled a smoke\n", citizens[a].name.c_str());
-		}
-
-	}
-	else
-	{
-		citizens[a].needs[FILTERS] = 1;
-		citizens[a].needs[SPIN] = 1;
-		citizens[a].needs[PAPERS] = 1;
-
-	}
-
 
 
 }
+
+
+
 
 
 
@@ -1370,7 +1354,18 @@ void update(int turn)
 			{
 				if (j != NONE)
 				{
-					printf("	has %s %f, needs %f. Source %i\n", item_names[j].c_str(), citizens[i].owned_items[j], citizens[i].needs[j], citizens[i].sources[j]);
+					std::string source_name = std::string("");
+					if (citizens[i].sources[j] >= 0)
+					{
+						source_name = citizens[ citizens[i].sources[j] ].name;
+
+					}
+					printf("	has %s %f, needs %f. source: %s\n", item_names[j].c_str(), citizens[i].owned_items[j], citizens[i].needs[j],
+
+					       source_name .c_str()
+					      );
+
+
 				}
 			}
 
@@ -1443,7 +1438,7 @@ void update(int turn)
 
 
 			// craft(i);
-			eat_breathe_etc(i);
+			needs_controller(i);
 			update_position_based_on_needs(i);
 
 		}
@@ -1508,36 +1503,39 @@ std::string get_input(std::string message)
 
 int extract_number_from_string(std::string str)
 {
-	// Example string
-	// std::string str = "this is my id 4321.";
-
-
 	printf("%s\n", str.c_str());
 	std::string strubstring = std::string("");
-
-// // For atoi, the input string has to start with a digit, so lets search for the first digit
-
 	for (size_t i = 0 ; i < str.length(); i++ )
 	{
 		if ( isdigit(str[i]) )
 		{strubstring.push_back(str[i]);}
 	}
-
-// // remove the first chars, which aren't digits
-// 	str = str.substr(i, str.length() - i );
-
-
-
 	printf("%s\n", strubstring.c_str());
-
-// convert the remaining text to an integer
 	int id = atoi(strubstring.c_str());
-
-// print the result
-	// std::cout << id << std::endl;
 	return id;
 }
 
+
+int extract_name_from_string(std::string str)
+{
+
+// return the index of the person whose name this most probably is.
+	int similarities[population_size];
+
+	for (int i = 0; i < str.length(); ++i)
+	{
+		similarities[i] = 0;
+	}
+
+	for (int i = 0; i < str.length(); ++i)
+	{
+		for (int j = 0; j < population_size; ++j)
+		{
+
+		}
+	}
+
+}
 
 
 int main ()
@@ -1646,7 +1644,7 @@ int main ()
 		}
 		else
 		{
-			std::string input_string = get_input("[go n|trade name]>");
+			std::string input_string = get_input("type what you do here >");
 
 			std::size_t found = input_string.find("trade");
 			if (found != std::string::npos)
@@ -1654,13 +1652,11 @@ int main ()
 				printf("> 'trade'\n");
 			}
 
-			std::size_t  found2 = input_string.find("go");
+			std::size_t  found2 = input_string.find("auto");
 			if (found2 != std::string::npos)
 			{
-
 				int n = extract_number_from_string(input_string);
 
-				printf("continue %i turns\n", n);
 				continue_turns = n;
 			}
 
