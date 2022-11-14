@@ -80,9 +80,10 @@ const int map_y = 24;
 
 const int n_characteristics = 5;
 
+
 bool print_chatter = false;
-bool print_trade = false;
-bool print_camera = true;
+bool print_trade = true;
+bool print_camera = false;
 bool print_stats = false;
 bool print_crafting = false;
 
@@ -187,10 +188,17 @@ const static std::string person_names[] =
 	std::string("Jasmine"),
 	std::string("Meg"),
 	std::string("Cat"),
-	std::string("Marioneismo"),
+	std::string("Swamp Beast"),
 };
 
 const int n_person_names = 100;
+int name_cursor = 0;
+
+std::string new_person_name()
+{
+	name_cursor++;
+	return person_names[name_cursor % n_person_names];
+}
 
 std::string location_names[] =
 {
@@ -259,6 +267,8 @@ struct Citizen
 
 	bool is_a_location;
 
+
+
 	Citizen()
 	{
 		this->name = person_names[xorshift32() % n_person_names];
@@ -273,7 +283,7 @@ struct Citizen
 		{
 			this->prices[i] = 1.0f + (RNG() - 0.5f);
 			this->owned_items[i] = 0.0f;//xorshift32() % 3;
-			this->needs[i] = 1;
+			this->needs[i] = 0;
 			this->sources[i] = -1;
 			this->source_prices[i] = 1.0f;
 		}
@@ -306,339 +316,244 @@ Citizen citizens[population_size];
 
 
 
-void trade(int a, int b)
+
+
+
+// one person asks another to sell them an item, and the other person makes a series of offers, the best of which is chosen.
+void trade(int a, int b, int a_wants_most, float how_much_a_wants)
 {
-	// a deal is negotiated between the two parties that maximises the utility for both.
-	float what_a_has_that_b_wants[n_trade_goods];
-	float what_b_has_that_a_wants[n_trade_goods];
-	for (int i = 0; i < n_trade_goods; ++i)
-	{
-		what_a_has_that_b_wants[i] = 0.0f;
-		what_b_has_that_a_wants[i] = 0.0f;
-	}
 
-	bool deal = false;
+	if (a_wants_most == NONE || how_much_a_wants <= 0.0f) {return;}
 
+	// printf("a asked b to trade!\n");
 
-
-	for (int i = 0; i < n_trade_goods; ++i)
+	if (citizens[b].owned_items[a_wants_most] > 0.0f
+	        // && citizens[b].owned_items[a_wants_most] > citizens[b].needs[a_wants_most]
+	   )
 	{
 
-		if (i != NONE)
+
+		printf("b has a surplus of the item a wants: %f %s !\n", how_much_a_wants, item_names[a_wants_most].c_str());
+
+
+		if (how_much_a_wants > citizens[b].owned_items[a_wants_most])
 		{
-			what_a_has_that_b_wants[i] = 0.0f;
+			how_much_a_wants = citizens[b].owned_items[a_wants_most];
 
-			if (
-			    (!(citizens[b].is_a_location))
-			    || (citizens[b].is_a_location && i == CASH)
+			printf("the trade was scaled to match b's quantity!\n");
 
-			)
-			{
-				if (citizens[b].needs[i] > 0.0f)
-				{
-					if (citizens[b].needs[i] > citizens[b].owned_items[i])
-					{
-						float required_amount = citizens[b].needs[i] - citizens[b].owned_items[i];
-						float available_amount = citizens[a].owned_items[i];// - citizens[a].needs[i];
-						if (available_amount > 0.0f)
-						{
-							if (available_amount > required_amount)
-							{
-								what_a_has_that_b_wants[i] = required_amount;
-							}
-							else
-							{
-								what_a_has_that_b_wants[i] = available_amount;
-							}
-
-
-							printf("%s has some %s that %s wants\n", citizens[a].name.c_str(), item_names[i].c_str(),  citizens[b].name.c_str() );
-
-							for (int m = 0; m < n_trade_goods; ++m)
-							{
-								printf("	a has %f needs %f\n", citizens[a].owned_items[m], citizens[a].needs[m] );
-							}
-							for (int m = 0; m < n_trade_goods; ++m)
-							{
-								printf("	b has %f needs %f\n", citizens[b].owned_items[m], citizens[b].needs[m] );
-							}
-						}
-					}
-				}
-			}
-
-			what_b_has_that_a_wants[i] = 0.0f;
-			if (
-			    (!(citizens[a].is_a_location))
-			    || (citizens[a].is_a_location && i == CASH)
-
-			)
-			{
-				if (citizens[a].needs[i] > 0.0f)
-				{
-					if (citizens[b].needs[i] > citizens[b].owned_items[i])
-					{
-						float required_amount =  citizens[a].needs[i] - citizens[a].owned_items[i];
-						float available_amount = citizens[b].owned_items[i];// - citizens[b].needs[i];
-						if (available_amount > 0.0f)
-						{
-							if (available_amount > required_amount)
-							{
-								what_b_has_that_a_wants[i] = required_amount;
-							}
-							else
-							{
-								what_b_has_that_a_wants[i] = available_amount;
-							}
-
-
-							printf("%s has some %s that %s wants\n", citizens[a].name.c_str(), item_names[i].c_str(),  citizens[b].name.c_str() );
-						}
-					}
-				}
-			}
-		}
-		else
-		{
-
-			what_a_has_that_b_wants[i] = 0.0f;
-			what_b_has_that_a_wants[i] = 0.0f;
 		}
 
-	}
 
-	float total_tradeable_goods_a = 0;
-	float total_tradeable_goods_b = 0;
-
-	for (int i = 0; i < n_trade_goods; ++i)
-	{
-		if (i != NONE)
-		{
-			if (what_a_has_that_b_wants[i] > 0.0f)
-			{
-				total_tradeable_goods_a += what_a_has_that_b_wants[i];
-
-				if (print_trade)
-				{
-					// printf("%s has some %s that %s wants\n", citizens[a].name.c_str(), item_names[i].c_str(),  citizens[b].name.c_str() );
-				}
-			}
-			if (what_b_has_that_a_wants[i] > 0.0f)
-			{
-				total_tradeable_goods_b += what_b_has_that_a_wants[i];
-
-				if (print_trade)
-				{
-					// printf("%s has some %s that %s wants\n", citizens[b].name.c_str(), item_names[i].c_str(),  citizens[a].name.c_str() );
-				}
-			}
-		}
-	}
-
-	int a_wants_most = NONE;
-	float a_greatest_value_seen = 0.0f;
-	int b_wants_most = NONE;
-	float b_greatest_value_seen = 0.0f;
-
-	float price_point_from_a_to_b      ;
-	float price_point_from_b_to_a      ;
-	float tradeable_volume_from_a_to_b ;
-	float tradeable_volume_from_b_to_a ;
+		// printf("%f %s\n", how_much_a_wants, item_names[a_wants_most].c_str());
 
 
-	if (total_tradeable_goods_a > 0.0f && total_tradeable_goods_b > 0.0f)
-	{
-		printf("an exchange can be made!\n");
+		float how_much_a_thinks_the_offer_is_worth = how_much_a_wants * citizens[a].prices[a_wants_most];
+		float how_much_b_thinks_the_offer_is_worth = how_much_a_wants * citizens[b].prices[a_wants_most];
 
-		// each party picks the kind of stuff they want from the other party.
-		deal = true;
+
+		float offers[n_trade_goods];
 
 		for (int i = 0; i < n_trade_goods; ++i)
 		{
-			float value_of_this_good_to_a = what_b_has_that_a_wants[i] * citizens[a].prices[i];
-			float value_of_this_good_to_b = what_a_has_that_b_wants[i] * citizens[b].prices[i];
-			if (value_of_this_good_to_a > a_greatest_value_seen)
+			offers[i] = how_much_b_thinks_the_offer_is_worth / citizens[b].prices[i] ;
+
+			if (offers[i] > (citizens[b].owned_items[i])) // offer them less if you don't have the full quantity.
 			{
-				a_wants_most = i;
-				a_greatest_value_seen = value_of_this_good_to_a;
+				offers[i] = citizens[b].owned_items[i];
 			}
-			if (value_of_this_good_to_b > b_greatest_value_seen)
+
+
+			if (i == NONE || i == a_wants_most) { offers[i] = 0.0f;}
+
+
+			printf(" a counter offer of %f %s\n", offers[i], item_names[i].c_str());
+			
+
+		}
+
+		int b_wants_most = -1;
+		int best_value_amount = 0.0f;
+
+		bool offers_refused[n_trade_goods];
+
+		for (int i = 0; i < n_trade_goods; ++i)
+		{
+			if (i != NONE)
 			{
-				b_wants_most = i;
-				b_greatest_value_seen = value_of_this_good_to_b;
+				if (offers[i] > 0.0f)
+				{
+					// a picks the best offer.
+					float offer_value_to_a = offers[i] * citizens[a].prices[i];
+
+					// if (offer_value_to_a > how_much_a_thinks_the_offer_is_worth)
+					// {
+						if (offer_value_to_a > best_value_amount)
+						{
+							best_value_amount = offer_value_to_a;
+							b_wants_most = -1;
+
+							printf("a agreed to the offer!\n");
+						}
+					// }
+				}
 			}
 		}
 
-		if (print_trade)
+		for (int i = 0; i < n_trade_goods; ++i)
 		{
-			printf("possible deal. %s wants %s's %s, and %s wants %s's %s\n",
-			       citizens[a].name.c_str(), citizens[b].name.c_str(), item_names[a_wants_most].c_str(),
-			       citizens[b].name.c_str(), citizens[a].name.c_str(), item_names[b_wants_most].c_str()
-			      );
+			if (i == b_wants_most)
+			{
+				offers_refused[i] = false;
+			}
+			else
+			{
+				offers_refused[i] = true;
+			}
+
+
 		}
 
 
 
-		if (a_wants_most == b_wants_most)
+
+
+		if (b_wants_most != -1)
 		{
-			// they both want the same stuff- there is no acceptable outcome!
-			// return;
+
+			// a deal can be struck!
+			citizens[a].traded_this_turn = true;
+			citizens[b].traded_this_turn = true;
+
+			// exchange the goods
+			citizens[a].owned_items[b_wants_most] -= offers[b_wants_most];
+			citizens[b].owned_items[b_wants_most] += offers[b_wants_most];
+
+
+			citizens[b].owned_items[a_wants_most] -= how_much_a_wants;//what_b_has_that_a_wants[a_wants_most];
+			citizens[a].owned_items[a_wants_most] += how_much_a_wants;//what_b_has_that_a_wants[a_wants_most];
+
+			// if the other's portion is more or less than what was expected, there is a reputation adjustment. Bigger deals have a bigger impact.
+			// how much you got - how much you expected to get
+			float rep_adjustment_a =  offers[b_wants_most] - how_much_a_thinks_the_offer_is_worth    ;//how_much_a_thinks_the_offer_is_worth - (citizens[a].prices[a_wants_most] * how_much_a_wants); //what_b_has_that_a_wants[a_wants_most]);
+			// float rep_adjustment_b =   how_much_b_thinks_the_offer_is_worth   ;//how_much_b_thinks_the_offer_is_worth - (citizens[b].prices[b_wants_most] * offers[b_wants_most] );//what_a_has_that_b_wants[b_wants_most]);
+
 			if (print_trade)
 			{
-				printf("want the same stuff, no deal\n");
+
+				printf("	%s traded %f %s to %s, for %f %s\n. Because of this, a's opinion of b changed by %f\n",
+				       citizens[a].name.c_str(), offers[b_wants_most], item_names[b_wants_most].c_str(),
+				       citizens[b].name.c_str(), how_much_a_wants, item_names[a_wants_most].c_str(),
+				       rep_adjustment_a
+				       // rep_adjustment_b
+				      );
 			}
-			deal = false;
-		}
 
-		if (a_wants_most == NONE || b_wants_most == NONE)
-		{
-			// it basically means, one of them didn't want anything.
-			// return;
 
-			if (print_trade)
+			citizens[a].likes[b] += rep_adjustment_a;
+			// citizens[a].likes[b] += rep_adjustment_b;
+
+			citizens[a].likes[b] = clamp(citizens[a].likes[b], -maximum_like, maximum_like);
+			// citizens[b].likes[a] = clamp(citizens[b].likes[a], -maximum_like, maximum_like);
+
+			// they also remember each other as sources.
+			if (citizens[b].prices[a_wants_most] < citizens[a].source_prices[a_wants_most])
 			{
-				printf("wants none, no deal\n");
+				citizens[a].sources[a_wants_most] = b;
+				citizens[a].source_prices[a_wants_most] = citizens[b].prices[a_wants_most];
 			}
-			deal = false;
+
+			// if (price_point_from_a_to_b < citizens[b].source_prices[b_wants_most])
+			// {
+			// 	citizens[b].sources[b_wants_most] = a;
+			// 	citizens[b].source_prices[b_wants_most] = price_point_from_a_to_b;
+			// }
+
+
+
+
+
+			// // citizens adjust their prices to meet the market demands.
+			// if (price_point_from_b_to_a > citizens[a].prices[a_wants_most])
+			// {
+			// 	citizens[a].prices[a_wants_most] *= 1.1f;
+			// }
+			// else
+			// {
+			// 	citizens[a].prices[a_wants_most] *= 0.9f;
+			// }
+			// if (price_point_from_a_to_b > citizens[a].prices[b_wants_most])
+			// {
+			// 	citizens[a].prices[b_wants_most] *= 1.1f;
+			// }
+			// else
+			// {
+			// 	citizens[a].prices[b_wants_most] *= 0.9f;
+			// }
+
+			// if (price_point_from_a_to_b > citizens[b].prices[b_wants_most])
+			// {
+			// 	citizens[b].prices[b_wants_most] *= 1.1f;
+			// }
+			// else
+			// {
+			// 	citizens[b].prices[b_wants_most] *= 0.9f;
+			// }
+			// if (price_point_from_b_to_a > citizens[b].prices[a_wants_most])
+			// {
+			// 	citizens[b].prices[a_wants_most] *= 1.1f;
+			// }
+			// else
+			// {
+			// 	citizens[b].prices[a_wants_most] *= 0.9f;
+			// }
+
+
+
+		}
+		else
+		{
+
+
+
+			// refer the client to someone else.
+			citizens[a].sources[a_wants_most] = citizens[b].sources[a_wants_most];
+			citizens[a].source_prices[a_wants_most] = citizens[b].source_prices[a_wants_most];
+
+
 		}
 
-		// a compromise is figured out so that each party gets what they think is a fair portion.
-		price_point_from_a_to_b = (citizens[a].prices[b_wants_most] + citizens[b].prices[b_wants_most]) / 2.0f;
-		price_point_from_b_to_a = (citizens[a].prices[a_wants_most] + citizens[b].prices[a_wants_most]) / 2.0f;
-		tradeable_volume_from_a_to_b = price_point_from_a_to_b * what_a_has_that_b_wants[b_wants_most];
-		tradeable_volume_from_b_to_a = price_point_from_b_to_a * what_b_has_that_a_wants[a_wants_most];
 
-		if (tradeable_volume_from_a_to_b > 0.0f && tradeable_volume_from_b_to_a > 0.0f)
+
+		for (int i = 0; i < n_trade_goods; ++i)
 		{
-			// scale the amounts by what's available on the bargaining floor
-			if (tradeable_volume_from_a_to_b > tradeable_volume_from_b_to_a)
+			if (offers[i] > 0.0f)
 			{
-				what_a_has_that_b_wants[b_wants_most] *= ( tradeable_volume_from_b_to_a / tradeable_volume_from_a_to_b );
+				if (offers_refused[i])
+				{
+					citizens[b].prices[i] *= 0.95f;
+				}
+				else
+				{
+					citizens[b].prices[i] *= 1.05f;
+				}
 			}
-			else if (tradeable_volume_from_b_to_a > tradeable_volume_from_a_to_b)
-			{
-				what_b_has_that_a_wants[a_wants_most] *= ( tradeable_volume_from_a_to_b / tradeable_volume_from_b_to_a );
-			}
-		}
-		else
-		{
-			// return;
-			if (print_trade)
-			{
-				printf("cannot reconcile tradeable volume\n");
-			}
-			deal = false;
 		}
 
 
 
-	}
+		// if (citizens[a].sources[a_wants_most] == b)
+		// {
+		// 	// you can't get this thing from b right now.
+		// 	citizens[a].sources[a_wants_most] = -1;
+		// }
 
 
-
-
-
-	if (deal)
-	{
-
-		// a deal can be struck!
-		citizens[a].traded_this_turn = true;
-		citizens[b].traded_this_turn = true;
-
-		// exchange the goods
-		citizens[a].owned_items[b_wants_most] -= what_a_has_that_b_wants[b_wants_most];
-		citizens[b].owned_items[b_wants_most] += what_a_has_that_b_wants[b_wants_most];
-
-
-		citizens[b].owned_items[a_wants_most] -= what_b_has_that_a_wants[a_wants_most];
-		citizens[a].owned_items[a_wants_most] += what_b_has_that_a_wants[a_wants_most];
-
-		// if the other's portion is more or less than what was expected, there is a reputation adjustment. Bigger deals have a bigger impact.
-		float rep_adjustment_a = tradeable_volume_from_b_to_a - (citizens[a].prices[a_wants_most] * what_b_has_that_a_wants[a_wants_most]);
-		float rep_adjustment_b = tradeable_volume_from_a_to_b - (citizens[b].prices[b_wants_most] * what_a_has_that_b_wants[b_wants_most]);
-
-		if (print_trade)
-		{
-
-			printf("	%s traded %f %s to %s, for %f %s\n. Because of this, their opinions of each other changed by %f and %f\n",
-			       citizens[a].name.c_str(), what_a_has_that_b_wants[b_wants_most], item_names[b_wants_most].c_str(),
-			       citizens[b].name.c_str(), what_b_has_that_a_wants[a_wants_most], item_names[a_wants_most].c_str(),
-			       rep_adjustment_a,
-			       rep_adjustment_b
-			      );
-		}
-
-
-		citizens[a].likes[b] += rep_adjustment_a;
-		citizens[a].likes[b] += rep_adjustment_b;
-
-		citizens[a].likes[b] = clamp(citizens[a].likes[b], -maximum_like, maximum_like);
-		citizens[b].likes[a] = clamp(citizens[b].likes[a], -maximum_like, maximum_like);
-
-		// they also remember each other as sources.
-		if (price_point_from_b_to_a < citizens[a].source_prices[a_wants_most])
-		{
-			citizens[a].sources[a_wants_most] = b;
-			citizens[a].source_prices[a_wants_most] = price_point_from_b_to_a;
-		}
-
-		if (price_point_from_a_to_b < citizens[b].source_prices[b_wants_most])
-		{
-			citizens[b].sources[b_wants_most] = a;
-			citizens[b].source_prices[b_wants_most] = price_point_from_a_to_b;
-		}
-
-		// citizens adjust their prices to meet the market demands.
-		if (price_point_from_b_to_a > citizens[a].prices[a_wants_most])
-		{
-			citizens[a].prices[a_wants_most] *= 1.1f;
-		}
-		else
-		{
-			citizens[a].prices[a_wants_most] *= 0.9f;
-		}
-		if (price_point_from_a_to_b > citizens[a].prices[b_wants_most])
-		{
-			citizens[a].prices[b_wants_most] *= 1.1f;
-		}
-		else
-		{
-			citizens[a].prices[b_wants_most] *= 0.9f;
-		}
-
-		if (price_point_from_a_to_b > citizens[b].prices[b_wants_most])
-		{
-			citizens[b].prices[b_wants_most] *= 1.1f;
-		}
-		else
-		{
-			citizens[b].prices[b_wants_most] *= 0.9f;
-		}
-		if (price_point_from_b_to_a > citizens[b].prices[a_wants_most])
-		{
-			citizens[b].prices[a_wants_most] *= 1.1f;
-		}
-		else
-		{
-			citizens[b].prices[a_wants_most] *= 0.9f;
-		}
-	}
-	else
-	{
-
-
-		if (citizens[a].sources[a_wants_most] == b)
-		{
-			// you can't get this thing from b right now.
-			citizens[a].sources[a_wants_most] = -1;
-		}
-
-
-		if (citizens[b].sources[b_wants_most] == a)
-		{
-			// you can't get this thing from b right now.
-			citizens[b].sources[b_wants_most] = -1;
-		}
+		// if (citizens[b].sources[b_wants_most] == a)
+		// {
+		// 	// you can't get this thing from b right now.
+		// 	citizens[b].sources[b_wants_most] = -1;
+		// }
 
 		// two characters exchange information about their sources;
 		// for (int i = 0; i < n_trade_goods; ++i)
@@ -647,49 +562,305 @@ void trade(int a, int b)
 		// if (citizens[a].needs[i] > 0.0f)
 		// {
 
-		if (citizens[b].source_prices[a_wants_most] < citizens[a].source_prices[a_wants_most]
-		        || citizens[a].source_prices[a_wants_most] == -1
-		   )
-		{
-
-			if (print_trade)
-			{
-				printf("	%s recommended %s as a source of %s\n",
-				       citizens[b].name.c_str(), citizens[a].name.c_str(), item_names[a_wants_most].c_str());
-			}
-			citizens[a].source_prices[a_wants_most] = citizens[b].source_prices[a_wants_most];
-			citizens[a].sources[a_wants_most] = citizens[b].sources[a_wants_most];
-		}
-		// }
-
-
-
-		// if (citizens[b].needs[i] > 0.0f)
+		// if (citizens[b].source_prices[a_wants_most] < citizens[a].source_prices[a_wants_most]
+		//         || citizens[a].source_prices[a_wants_most] == -1
+		//    )
 		// {
-		if (citizens[a].source_prices[b_wants_most] < citizens[b].source_prices[b_wants_most]
-		        || citizens[b].source_prices[b_wants_most] == -1 )
-		{
 
-			if (print_trade)
-			{
-				printf("	%s recommended %s as a source of %s\n",
-				       citizens[a].name.c_str(), citizens[b].name.c_str(), item_names[b_wants_most].c_str());
-			}
-
-			citizens[b].source_prices[b_wants_most] = citizens[a].source_prices[b_wants_most];
-			citizens[b].sources[b_wants_most] = citizens[a].sources[b_wants_most];
-		}
+		// 	if (print_trade)
+		// 	{
+		// 		printf("	%s recommended %s as a source of %s\n",
+		// 		       citizens[b].name.c_str(), citizens[a].name.c_str(), item_names[a_wants_most].c_str());
+		// 	}
+		// 	citizens[a].source_prices[a_wants_most] = citizens[b].source_prices[a_wants_most];
+		// 	citizens[a].sources[a_wants_most] = citizens[b].sources[a_wants_most];
 		// }
 		// }
+
+
+
+		// // if (citizens[b].needs[i] > 0.0f)
+		// // {
+		// if (citizens[a].source_prices[b_wants_most] < citizens[b].source_prices[b_wants_most]
+		//         || citizens[b].source_prices[b_wants_most] == -1 )
+		// {
+
+		// 	if (print_trade)
+		// 	{
+		// 		printf("	%s recommended %s as a source of %s\n",
+		// 		       citizens[a].name.c_str(), citizens[b].name.c_str(), item_names[b_wants_most].c_str());
+		// 	}
+
+		// 	citizens[b].source_prices[b_wants_most] = citizens[a].source_prices[b_wants_most];
+		// 	citizens[b].sources[b_wants_most] = citizens[a].sources[b_wants_most];
+		// }
+		// }
+		// }
+
+
+
+
+
+
+		citizens[a].knows[b] += 1.0f;
+		citizens[b].knows[a] += 1.0f;
+
+
+
+
+
+
 
 	}
 
-
-
-
-	citizens[a].knows[b] += 1.0f;
-	citizens[b].knows[a] += 1.0f;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// void trade_old(int a, int b)
+// {
+// 	// a deal is negotiated between the two parties that maximises the utility for both.
+// 	float what_a_has_that_b_wants[n_trade_goods];
+// 	float what_b_has_that_a_wants[n_trade_goods];
+// 	for (int i = 0; i < n_trade_goods; ++i)
+// 	{
+// 		what_a_has_that_b_wants[i] = 0.0f;
+// 		what_b_has_that_a_wants[i] = 0.0f;
+// 	}
+
+// 	bool deal = false;
+
+
+
+// 	for (int i = 0; i < n_trade_goods; ++i)
+// 	{
+
+// 		if (i != NONE)
+// 		{
+// 			what_a_has_that_b_wants[i] = 0.0f;
+
+// 			if (
+// 			    (!(citizens[b].is_a_location))
+// 			    || (citizens[b].is_a_location && i == CASH)
+
+// 			)
+// 			{
+// 				if (citizens[b].needs[i] > 0.0f)
+// 				{
+// 					if (citizens[b].needs[i] > citizens[b].owned_items[i])
+// 					{
+// 						float required_amount = citizens[b].needs[i] - citizens[b].owned_items[i];
+// 						float available_amount = citizens[a].owned_items[i] - citizens[a].needs[i];
+// 						if (available_amount > 0.0f)
+// 						{
+// 							if (available_amount > required_amount)
+// 							{
+// 								what_a_has_that_b_wants[i] = required_amount;
+// 							}
+// 							else
+// 							{
+// 								what_a_has_that_b_wants[i] = available_amount;
+// 							}
+
+
+// 							// printf("%s has some %s that %s wants\n", citizens[a].name.c_str(), item_names[i].c_str(),  citizens[b].name.c_str() );
+
+// 							// for (int m = 0; m < n_trade_goods; ++m)
+// 							// {
+// 							// 	printf("	a has %f needs %f\n", citizens[a].owned_items[m], citizens[a].needs[m] );
+// 							// }
+// 							// for (int m = 0; m < n_trade_goods; ++m)
+// 							// {
+// 							// 	printf("	b has %f needs %f\n", citizens[b].owned_items[m], citizens[b].needs[m] );
+// 							// }
+// 						}
+// 					}
+// 				}
+// 			}
+
+// 			what_b_has_that_a_wants[i] = 0.0f;
+// 			if (
+// 			    (!(citizens[a].is_a_location))
+// 			    || (citizens[a].is_a_location && i == CASH)
+
+// 			)
+// 			{
+// 				if (citizens[a].needs[i] > 0.0f)
+// 				{
+// 					if (citizens[b].needs[i] > citizens[b].owned_items[i])
+// 					{
+// 						float required_amount =  citizens[a].needs[i] - citizens[a].owned_items[i];
+// 						float available_amount = citizens[b].owned_items[i] - citizens[b].needs[i];
+// 						if (available_amount > 0.0f)
+// 						{
+// 							if (available_amount > required_amount)
+// 							{
+// 								what_b_has_that_a_wants[i] = required_amount;
+// 							}
+// 							else
+// 							{
+// 								what_b_has_that_a_wants[i] = available_amount;
+// 							}
+
+
+// 							// printf("%s has some %s that %s wants\n", citizens[a].name.c_str(), item_names[i].c_str(),  citizens[b].name.c_str() );
+// 						}
+// 					}
+// 				}
+// 			}
+// 		}
+// 		else
+// 		{
+
+// 			what_a_has_that_b_wants[i] = 0.0f;
+// 			what_b_has_that_a_wants[i] = 0.0f;
+// 		}
+
+// 	}
+
+// 	float total_tradeable_goods_a = 0;
+// 	float total_tradeable_goods_b = 0;
+
+// 	for (int i = 0; i < n_trade_goods; ++i)
+// 	{
+// 		if (i != NONE)
+// 		{
+// 			if (what_a_has_that_b_wants[i] > 0.0f)
+// 			{
+// 				total_tradeable_goods_a += what_a_has_that_b_wants[i];
+
+// 				if (print_trade)
+// 				{
+// 					printf("%s has some %s that %s wants\n", citizens[a].name.c_str(), item_names[i].c_str(),  citizens[b].name.c_str() );
+// 				}
+// 			}
+// 			if (what_b_has_that_a_wants[i] > 0.0f)
+// 			{
+// 				total_tradeable_goods_b += what_b_has_that_a_wants[i];
+
+// 				if (print_trade)
+// 				{
+// 					printf("%s has some %s that %s wants\n", citizens[b].name.c_str(), item_names[i].c_str(),  citizens[a].name.c_str() );
+// 				}
+// 			}
+// 		}
+// 	}
+
+// 	int a_wants_most = NONE;
+// 	float a_greatest_value_seen = 0.0f;
+// 	int b_wants_most = NONE;
+// 	float b_greatest_value_seen = 0.0f;
+
+// 	float price_point_from_a_to_b      ;
+// 	float price_point_from_b_to_a      ;
+// 	float tradeable_volume_from_a_to_b ;
+// 	float tradeable_volume_from_b_to_a ;
+
+
+// 	if (total_tradeable_goods_a > 0.0f && total_tradeable_goods_b > 0.0f)
+// 	{
+// 		printf("an exchange can be made!\n");
+
+// 		// each party picks the kind of stuff they want from the other party.
+// 		deal = true;
+
+// 		for (int i = 0; i < n_trade_goods; ++i)
+// 		{
+// 			float value_of_this_good_to_a = what_b_has_that_a_wants[i] * citizens[a].prices[i];
+// 			float value_of_this_good_to_b = what_a_has_that_b_wants[i] * citizens[b].prices[i];
+// 			if (value_of_this_good_to_a > a_greatest_value_seen)
+// 			{
+// 				a_wants_most = i;
+// 				a_greatest_value_seen = value_of_this_good_to_a;
+// 			}
+// 			if (value_of_this_good_to_b > b_greatest_value_seen)
+// 			{
+// 				b_wants_most = i;
+// 				b_greatest_value_seen = value_of_this_good_to_b;
+// 			}
+// 		}
+
+// 		if (print_trade)
+// 		{
+// 			printf("possible deal. %s wants %s's %s, and %s wants %s's %s\n",
+// 			       citizens[a].name.c_str(), citizens[b].name.c_str(), item_names[a_wants_most].c_str(),
+// 			       citizens[b].name.c_str(), citizens[a].name.c_str(), item_names[b_wants_most].c_str()
+// 			      );
+// 		}
+
+
+
+// 		if (a_wants_most == b_wants_most)
+// 		{
+// 			// they both want the same stuff- there is no acceptable outcome!
+// 			// return;
+// 			if (print_trade)
+// 			{
+// 				printf("want the same stuff, no deal\n");
+// 			}
+// 			deal = false;
+// 		}
+
+// 		if (a_wants_most == NONE || b_wants_most == NONE)
+// 		{
+// 			// it basically means, one of them didn't want anything.
+// 			// return;
+
+// 			if (print_trade)
+// 			{
+// 				printf("wants none, no deal\n");
+// 			}
+// 			deal = false;
+// 		}
+
+// 		// a compromise is figured out so that each party gets what they think is a fair portion.
+// 		price_point_from_a_to_b = (citizens[a].prices[b_wants_most] + citizens[b].prices[b_wants_most]) / 2.0f;
+// 		price_point_from_b_to_a = (citizens[a].prices[a_wants_most] + citizens[b].prices[a_wants_most]) / 2.0f;
+// 		tradeable_volume_from_a_to_b = price_point_from_a_to_b * what_a_has_that_b_wants[b_wants_most];
+// 		tradeable_volume_from_b_to_a = price_point_from_b_to_a * what_b_has_that_a_wants[a_wants_most];
+
+// 		if (tradeable_volume_from_a_to_b > 0.0f && tradeable_volume_from_b_to_a > 0.0f)
+// 		{
+// 			// scale the amounts by what's available on the bargaining floor
+// 			if (tradeable_volume_from_a_to_b > tradeable_volume_from_b_to_a)
+// 			{
+// 				what_a_has_that_b_wants[b_wants_most] *= ( tradeable_volume_from_b_to_a / tradeable_volume_from_a_to_b );
+// 			}
+// 			else if (tradeable_volume_from_b_to_a > tradeable_volume_from_a_to_b)
+// 			{
+// 				what_b_has_that_a_wants[a_wants_most] *= ( tradeable_volume_from_a_to_b / tradeable_volume_from_b_to_a );
+// 			}
+// 		}
+// 		else
+// 		{
+// 			// return;
+// 			if (print_trade)
+// 			{
+// 				printf("cannot reconcile tradeable volume\n");
+// 			}
+// 			deal = false;
+// 		}
+
+
+
+// 	}
+
+
+
+
+
+// }
 
 
 
@@ -1161,10 +1332,18 @@ void update()
 					gossip(i, met_with);
 				}
 
-				trade(i, met_with);
 
 
+				for (int j = 0; j < n_trade_goods; ++j)
+				{
+					if (citizens[i].needs[j] > 0.0f)
+					{
 
+						trade(i, met_with, j, citizens[i].needs[j] );
+					}
+
+
+				}
 
 			}
 
