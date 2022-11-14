@@ -53,6 +53,21 @@ const int population_size = 100;
 # define FILTERS 7
 # define LIGHTER 8
 
+
+const static std::string item_names[] =
+{
+	std::string("none"),
+	std::string("cash"),
+	std::string("booze"),
+	std::string("snacks"),
+	std::string("smokes"),
+	std::string("papers"),
+	std::string("spin"),
+	std::string("filters"),
+	std::string("lighter"),
+
+};
+
 const int n_trade_goods = 8;
 const int map_x = 80;
 const int map_y = 24;
@@ -65,39 +80,117 @@ const int map_y = 24;
 
 const int n_characteristics = 5;
 
-std::string person_names[] =
+bool print_chatter = false;
+bool print_trade = false;
+bool print_camera = true;
+bool print_stats = false;
+bool print_crafting = false;
+
+const static std::string characteristic_names[] =
+{
+
+	std::string("cute"),
+	std::string("funny"),
+	std::string("smart"),
+	std::string("tough"),
+	std::string("cool"),
+};
+
+const static std::string person_names[] =
 {
 	std::string("Brandon"),
 	std::string("Kyle"),
-	std::string("Keith"),
-	std::string("Joel"),
+	std::string("Keelan"),
+	std::string("Jonah"),
 	std::string("Jeremy"),
-
-
-
 	std::string("Molly"),
 	std::string("Holly"),
-	std::string("Kayla"),
+	std::string("Kaylah"),
 	std::string("Mikayla"),
 	std::string("Bree"),
-
-
-
 	std::string("Shaun"),
 	std::string("Jake"),
 	std::string("Stephen"),
 	std::string("Mitchell"),
 	std::string("Bryce"),
-
-
-
 	std::string("Brittney"),
 	std::string("Ella"),
 	std::string("Kaliah"),
 	std::string("Emily"),
 	std::string("Rayleigh"),
+	std::string("River"),
+	std::string("Morgan"),
+	std::string("Zen"),
+	std::string("Ziggy"),
+	std::string("Ollie"),
+	std::string("Alex"),
+	std::string("Alisha"),
+	std::string("Amber"),
+	std::string("Ellie"),
+	std::string("Maddy"),
+	std::string("Sarah"),
+	std::string("Michelle"),
+	std::string("Hayden"),
+	std::string("Patrick"),
+	std::string("Luke"),
+	std::string("Connor"),
+	std::string("Jarrad"),
+	std::string("Sam"),
+	std::string("Lewis"),
+	std::string("Jay"),
+	std::string("Krissy"),
+	std::string("Ruby"),
+	std::string("Julian"),
+	std::string("Ben"),
+	std::string("Jessica"),
+	std::string("Lauren"),
+	std::string("Jesse"),
+	std::string("Ryan"),
+	std::string("Olivia"),
+	std::string("Danielle"),
+	std::string("Jas"),
+	std::string("Khalla"),
+	std::string("Philippa"),
+	std::string("Amy"),
+	std::string("Lili"),
+	std::string("Arden"),
+	std::string("Jayden"),
+	std::string("Jack"),
+	std::string("Storm"),
+	std::string("Zack"),
+	std::string("Elise"),
+	std::string("Nicola"),
+	std::string("Trey"),
+	std::string("Kai"),
+	std::string("Justin"),
+	std::string("Alia"),
+	std::string("Isaac"),
+	std::string("Monisha"),
+	std::string("Josh"),
+	std::string("Charlie"),
+	std::string("Nathan"),
+	std::string("Rebecca"),
+	std::string("Peter"),
+	std::string("Elena"),
+	std::string("Lina"),
+	std::string("Karlee"),
+	std::string("Nicky"),
+	std::string("Dylan"),
+	std::string("Lindsay"),
+	std::string("Rowan"),
+	std::string("Anne"),
+	std::string("Mittens"),
+	std::string("CJ"),
+	std::string("Cooper"),
+	std::string("Siena"),
+	std::string("Bianca"),
+	std::string("Jasmine"),
+	std::string("Meg"),
+	std::string("Cat"),
+	std::string("Marioneismo"),
 };
 
+const int n_person_names = 100;
 
 std::string location_names[] =
 {
@@ -109,7 +202,6 @@ std::string location_names[] =
 
 
 
-const int n_person_names = 15;
 const int n_location_names = 4;
 
 const unsigned int name_length = 16;
@@ -125,7 +217,12 @@ char suggest_icon()
 	{
 		icon = xorshift32() % 255;
 
-		if (icon != 0 && icon != '_' && icon != '\n')
+		if (icon != 0
+		        && icon != '_'
+		        && icon != ' '
+		        && icon != '\n'
+		        && icon != '\r'
+		        && icon != '	')
 		{
 			return icon;
 		}
@@ -144,6 +241,8 @@ struct Citizen
 
 	int sources[n_trade_goods];
 	float source_prices[n_trade_goods];
+
+	int sales_quantity_increment[n_trade_goods];
 
 	int position_x;
 	int position_y;
@@ -172,8 +271,8 @@ struct Citizen
 		this->is_a_location = false;
 		for (int i = 0; i < n_trade_goods; ++i)
 		{
-			this->prices[i] = 1.0f;
-			this->owned_items[i] = xorshift32() % 3;
+			this->prices[i] = 1.0f + (RNG() - 0.5f);
+			this->owned_items[i] = 0.0f;//xorshift32() % 3;
 			this->needs[i] = 1;
 			this->sources[i] = -1;
 			this->source_prices[i] = 1.0f;
@@ -185,9 +284,20 @@ struct Citizen
 		}
 		for (int i = 0; i < n_characteristics; ++i)
 		{
-			this->personality[i] = RNG();
-			this->ideals[i] = RNG();
+			this->personality[i] = (RNG() - 0.5f) * 2.0f;
+			this->ideals[i] = (RNG() - 0.5f) * 2.0f;
 		}
+
+		for (int i = 0; i < n_trade_goods; ++i)
+		{
+			if (RNG() < 0.05)
+			{
+				this->owned_items[i] = 100;
+			}
+		}
+
+		this->owned_items[CASH] = RNG() * 100.0f;
+
 	}
 };
 
@@ -204,45 +314,97 @@ void trade(int a, int b)
 	for (int i = 0; i < n_trade_goods; ++i)
 	{
 		what_a_has_that_b_wants[i] = 0.0f;
-
-		if (citizens[b].needs[i] > 0.0f)
-		{
-			if (citizens[b].needs[i] > citizens[b].owned_items[i])
-			{
-				float required_amount = citizens[b].needs[i] - citizens[b].owned_items[i];
-				if (citizens[a].owned_items[i] > 0.0f)
-				{
-					if (citizens[a].owned_items[i] > required_amount)
-					{
-						what_a_has_that_b_wants[i] = required_amount;
-					}
-					else
-					{
-						what_a_has_that_b_wants[i] = citizens[a].owned_items[i];
-					}
-				}
-			}
-		}
-
 		what_b_has_that_a_wants[i] = 0.0f;
-		if (citizens[a].needs[i] > 0.0f)
+	}
+
+	bool deal = false;
+
+
+
+	for (int i = 0; i < n_trade_goods; ++i)
+	{
+
+		if (i != NONE)
 		{
-			if (citizens[b].needs[i] > citizens[b].owned_items[i])
+			what_a_has_that_b_wants[i] = 0.0f;
+
+			if (
+			    (!(citizens[b].is_a_location))
+			    || (citizens[b].is_a_location && i == CASH)
+
+			)
 			{
-				float required_amount =  citizens[a].needs[i] - citizens[a].owned_items[i];
-				if (citizens[b].owned_items[i] > 0.0f)
+				if (citizens[b].needs[i] > 0.0f)
 				{
-					if (citizens[b].owned_items[i] > required_amount)
+					if (citizens[b].needs[i] > citizens[b].owned_items[i])
 					{
-						what_b_has_that_a_wants[i] = required_amount;
+						float required_amount = citizens[b].needs[i] - citizens[b].owned_items[i];
+						float available_amount = citizens[a].owned_items[i];// - citizens[a].needs[i];
+						if (available_amount > 0.0f)
+						{
+							if (available_amount > required_amount)
+							{
+								what_a_has_that_b_wants[i] = required_amount;
+							}
+							else
+							{
+								what_a_has_that_b_wants[i] = available_amount;
+							}
+
+
+							printf("%s has some %s that %s wants\n", citizens[a].name.c_str(), item_names[i].c_str(),  citizens[b].name.c_str() );
+
+							for (int m = 0; m < n_trade_goods; ++m)
+							{
+								printf("	a has %f needs %f\n", citizens[a].owned_items[m], citizens[a].needs[m] );
+							}
+							for (int m = 0; m < n_trade_goods; ++m)
+							{
+								printf("	b has %f needs %f\n", citizens[b].owned_items[m], citizens[b].needs[m] );
+							}
+						}
 					}
-					else
+				}
+			}
+
+			what_b_has_that_a_wants[i] = 0.0f;
+			if (
+			    (!(citizens[a].is_a_location))
+			    || (citizens[a].is_a_location && i == CASH)
+
+			)
+			{
+				if (citizens[a].needs[i] > 0.0f)
+				{
+					if (citizens[b].needs[i] > citizens[b].owned_items[i])
 					{
-						what_b_has_that_a_wants[i] = citizens[b].owned_items[i];
+						float required_amount =  citizens[a].needs[i] - citizens[a].owned_items[i];
+						float available_amount = citizens[b].owned_items[i];// - citizens[b].needs[i];
+						if (available_amount > 0.0f)
+						{
+							if (available_amount > required_amount)
+							{
+								what_b_has_that_a_wants[i] = required_amount;
+							}
+							else
+							{
+								what_b_has_that_a_wants[i] = available_amount;
+							}
+
+
+							printf("%s has some %s that %s wants\n", citizens[a].name.c_str(), item_names[i].c_str(),  citizens[b].name.c_str() );
+						}
 					}
 				}
 			}
 		}
+		else
+		{
+
+			what_a_has_that_b_wants[i] = 0.0f;
+			what_b_has_that_a_wants[i] = 0.0f;
+		}
+
 	}
 
 	float total_tradeable_goods_a = 0;
@@ -250,27 +412,46 @@ void trade(int a, int b)
 
 	for (int i = 0; i < n_trade_goods; ++i)
 	{
-		if (what_a_has_that_b_wants[i] > 0.0f)
+		if (i != NONE)
 		{
-			total_tradeable_goods_a += what_a_has_that_b_wants[i];
-		}
-		if (what_b_has_that_a_wants[i] > 0.0f)
-		{
-			total_tradeable_goods_b += what_b_has_that_a_wants[i];
+			if (what_a_has_that_b_wants[i] > 0.0f)
+			{
+				total_tradeable_goods_a += what_a_has_that_b_wants[i];
+
+				if (print_trade)
+				{
+					// printf("%s has some %s that %s wants\n", citizens[a].name.c_str(), item_names[i].c_str(),  citizens[b].name.c_str() );
+				}
+			}
+			if (what_b_has_that_a_wants[i] > 0.0f)
+			{
+				total_tradeable_goods_b += what_b_has_that_a_wants[i];
+
+				if (print_trade)
+				{
+					// printf("%s has some %s that %s wants\n", citizens[b].name.c_str(), item_names[i].c_str(),  citizens[a].name.c_str() );
+				}
+			}
 		}
 	}
 
+	int a_wants_most = NONE;
+	float a_greatest_value_seen = 0.0f;
+	int b_wants_most = NONE;
+	float b_greatest_value_seen = 0.0f;
+
+	float price_point_from_a_to_b      ;
+	float price_point_from_b_to_a      ;
+	float tradeable_volume_from_a_to_b ;
+	float tradeable_volume_from_b_to_a ;
+
+
 	if (total_tradeable_goods_a > 0.0f && total_tradeable_goods_b > 0.0f)
 	{
-		// a deal can be struck!
-		citizens[a].traded_this_turn = true;
-		citizens[b].traded_this_turn = true;
+		printf("an exchange can be made!\n");
 
 		// each party picks the kind of stuff they want from the other party.
-		int a_wants_most = NONE;
-		float a_greatest_value_seen = 0.0f;
-		int b_wants_most = NONE;
-		float b_greatest_value_seen = 0.0f;
+		deal = true;
 
 		for (int i = 0; i < n_trade_goods; ++i)
 		{
@@ -288,18 +469,44 @@ void trade(int a, int b)
 			}
 		}
 
+		if (print_trade)
+		{
+			printf("possible deal. %s wants %s's %s, and %s wants %s's %s\n",
+			       citizens[a].name.c_str(), citizens[b].name.c_str(), item_names[a_wants_most].c_str(),
+			       citizens[b].name.c_str(), citizens[a].name.c_str(), item_names[b_wants_most].c_str()
+			      );
+		}
+
+
+
 		if (a_wants_most == b_wants_most)
 		{
 			// they both want the same stuff- there is no acceptable outcome!
-			return;
+			// return;
+			if (print_trade)
+			{
+				printf("want the same stuff, no deal\n");
+			}
+			deal = false;
+		}
+
+		if (a_wants_most == NONE || b_wants_most == NONE)
+		{
+			// it basically means, one of them didn't want anything.
+			// return;
+
+			if (print_trade)
+			{
+				printf("wants none, no deal\n");
+			}
+			deal = false;
 		}
 
 		// a compromise is figured out so that each party gets what they think is a fair portion.
-		float price_point_from_a_to_b = (citizens[a].prices[b_wants_most] + citizens[b].prices[b_wants_most]) / 2.0f;
-		float price_point_from_b_to_a = (citizens[a].prices[a_wants_most] + citizens[b].prices[a_wants_most]) / 2.0f;
-
-		float tradeable_volume_from_a_to_b = price_point_from_a_to_b * what_a_has_that_b_wants[b_wants_most];
-		float tradeable_volume_from_b_to_a = price_point_from_b_to_a * what_b_has_that_a_wants[a_wants_most];
+		price_point_from_a_to_b = (citizens[a].prices[b_wants_most] + citizens[b].prices[b_wants_most]) / 2.0f;
+		price_point_from_b_to_a = (citizens[a].prices[a_wants_most] + citizens[b].prices[a_wants_most]) / 2.0f;
+		tradeable_volume_from_a_to_b = price_point_from_a_to_b * what_a_has_that_b_wants[b_wants_most];
+		tradeable_volume_from_b_to_a = price_point_from_b_to_a * what_b_has_that_a_wants[a_wants_most];
 
 		if (tradeable_volume_from_a_to_b > 0.0f && tradeable_volume_from_b_to_a > 0.0f)
 		{
@@ -315,8 +522,28 @@ void trade(int a, int b)
 		}
 		else
 		{
-			return;
+			// return;
+			if (print_trade)
+			{
+				printf("cannot reconcile tradeable volume\n");
+			}
+			deal = false;
 		}
+
+
+
+	}
+
+
+
+
+
+	if (deal)
+	{
+
+		// a deal can be struck!
+		citizens[a].traded_this_turn = true;
+		citizens[b].traded_this_turn = true;
 
 		// exchange the goods
 		citizens[a].owned_items[b_wants_most] -= what_a_has_that_b_wants[b_wants_most];
@@ -329,6 +556,18 @@ void trade(int a, int b)
 		// if the other's portion is more or less than what was expected, there is a reputation adjustment. Bigger deals have a bigger impact.
 		float rep_adjustment_a = tradeable_volume_from_b_to_a - (citizens[a].prices[a_wants_most] * what_b_has_that_a_wants[a_wants_most]);
 		float rep_adjustment_b = tradeable_volume_from_a_to_b - (citizens[b].prices[b_wants_most] * what_a_has_that_b_wants[b_wants_most]);
+
+		if (print_trade)
+		{
+
+			printf("	%s traded %f %s to %s, for %f %s\n. Because of this, their opinions of each other changed by %f and %f\n",
+			       citizens[a].name.c_str(), what_a_has_that_b_wants[b_wants_most], item_names[b_wants_most].c_str(),
+			       citizens[b].name.c_str(), what_b_has_that_a_wants[a_wants_most], item_names[a_wants_most].c_str(),
+			       rep_adjustment_a,
+			       rep_adjustment_b
+			      );
+		}
+
 
 		citizens[a].likes[b] += rep_adjustment_a;
 		citizens[a].likes[b] += rep_adjustment_b;
@@ -383,10 +622,73 @@ void trade(int a, int b)
 		{
 			citizens[b].prices[a_wants_most] *= 0.9f;
 		}
-
-		citizens[a].knows[b] += 1.0f;
-		citizens[b].knows[a] += 1.0f;
 	}
+	else
+	{
+
+
+		if (citizens[a].sources[a_wants_most] == b)
+		{
+			// you can't get this thing from b right now.
+			citizens[a].sources[a_wants_most] = -1;
+		}
+
+
+		if (citizens[b].sources[b_wants_most] == a)
+		{
+			// you can't get this thing from b right now.
+			citizens[b].sources[b_wants_most] = -1;
+		}
+
+		// two characters exchange information about their sources;
+		// for (int i = 0; i < n_trade_goods; ++i)
+		// {
+
+		// if (citizens[a].needs[i] > 0.0f)
+		// {
+
+		if (citizens[b].source_prices[a_wants_most] < citizens[a].source_prices[a_wants_most]
+		        || citizens[a].source_prices[a_wants_most] == -1
+		   )
+		{
+
+			if (print_trade)
+			{
+				printf("	%s recommended %s as a source of %s\n",
+				       citizens[b].name.c_str(), citizens[a].name.c_str(), item_names[a_wants_most].c_str());
+			}
+			citizens[a].source_prices[a_wants_most] = citizens[b].source_prices[a_wants_most];
+			citizens[a].sources[a_wants_most] = citizens[b].sources[a_wants_most];
+		}
+		// }
+
+
+
+		// if (citizens[b].needs[i] > 0.0f)
+		// {
+		if (citizens[a].source_prices[b_wants_most] < citizens[b].source_prices[b_wants_most]
+		        || citizens[b].source_prices[b_wants_most] == -1 )
+		{
+
+			if (print_trade)
+			{
+				printf("	%s recommended %s as a source of %s\n",
+				       citizens[a].name.c_str(), citizens[b].name.c_str(), item_names[b_wants_most].c_str());
+			}
+
+			citizens[b].source_prices[b_wants_most] = citizens[a].source_prices[b_wants_most];
+			citizens[b].sources[b_wants_most] = citizens[a].sources[b_wants_most];
+		}
+		// }
+		// }
+
+	}
+
+
+
+
+	citizens[a].knows[b] += 1.0f;
+	citizens[b].knows[a] += 1.0f;
 }
 
 
@@ -413,24 +715,23 @@ void gossip(int a, int b)
 
 	citizens[a].likes[b] = clamp(citizens[a].likes[b], -maximum_like, maximum_like);
 	citizens[b].likes[a] = clamp(citizens[b].likes[a], -maximum_like, maximum_like);
-
-	printf("these two characters hang out and made impressions on each other: %f, %f\n", a_impression_b, b_impression_a);
-
-
-	// two characters exchange information about their sources;
-	for (int i = 0; i < n_trade_goods; ++i)
+	if (print_chatter)
 	{
-		if (citizens[b].source_prices[i] < citizens[a].source_prices[i]  || citizens[a].source_prices[i] == -1)
-		{
-			citizens[a].source_prices[i] = citizens[b].source_prices[i];
-			citizens[a].sources[i] = citizens[b].sources[i];
-		}
-		else if (citizens[a].source_prices[i] < citizens[b].source_prices[i] || citizens[b].source_prices[i] == -1 )
-		{
-			citizens[b].source_prices[i] = citizens[a].source_prices[i];
-			citizens[b].sources[i] = citizens[a].sources[i];
-		}
+		printf("\n");
+		printf("%s and %s hung out. They like each other %f and %f\n",
+		       citizens[a].name.c_str(), citizens[b].name.c_str(), citizens[a].likes[b], citizens[b].likes[a]);
+
+
+
+
+
+		printf("	 %s said something %s. Their opinions of each other changed by %f and %f\n",
+		       citizens[a].name.c_str(), characteristic_names[ a_does_something].c_str(), a_impression_b, b_impression_a);
+
 	}
+
+
+
 
 
 
@@ -465,14 +766,15 @@ void gossip(int a, int b)
 			float b_rep_c  =  how_much_a_likes_c  * how_much_b_likes_a  * gossip_const;
 			float a_rep_c  =  how_much_b_likes_c  * how_much_a_likes_b * gossip_const;
 
-			printf("%i and %i talked about %i. They like each other %f, %f.\nThey like the person they discussed %f, %f. Their opinions of this person changed by %f and %f\n",
-			       a, b, c, citizens[a].likes[b], citizens[b].likes[a], citizens[a].likes[c], citizens[b].likes[c],
-			       a_rep_c, b_rep_c);
+			if (print_chatter)
+			{
+				printf("	They talked about %s. They like them %f and %f. Their opinions of %s changed by %f and %f.",
+				       citizens[c].name.c_str(),  citizens[a].likes[c], citizens[b].likes[c],
+				       citizens[c].name.c_str(),  a_rep_c, b_rep_c);
 
 
-			printf("their opinions of each other changed by %f and %f\n", a_rep_b, b_rep_a);
-
-			printf("\n");
+				printf(" Their opinions of each other changed by %f and %f\n", a_rep_b, b_rep_a);
+			}
 
 			citizens[a].likes[b] += a_rep_b;
 			citizens[a].likes[c] += a_rep_c;
@@ -485,6 +787,9 @@ void gossip(int a, int b)
 			citizens[b].likes[a] = clamp(citizens[b].likes[a], -maximum_like, maximum_like);
 			citizens[b].likes[c] = clamp(citizens[b].likes[c], -maximum_like, maximum_like);
 
+
+
+
 			break; // only talk about one person.
 		}
 	}
@@ -496,51 +801,74 @@ void gossip(int a, int b)
 
 
 
-const float eat_per_turn = 0.01f;
-const float drink_per_turn = 0.02f;
-const float smoke_per_turn = 0.05f;
-const float lighter_used_per_smoke = 0.005f;
+const float eat_per_turn = 0.001f;
+const float drink_per_turn = 0.002f;
+const float smoke_per_turn = 0.005f;
 
 void eat_breathe_etc(int a)
 {
 
-	if (citizens[a].owned_items[SNACKS] > eat_per_turn)
+	if (citizens[a].owned_items[SNACKS] > 0)
 	{
-		citizens[a].owned_items[SNACKS] -= eat_per_turn;
+
 		citizens[a].needs[SNACKS] = 0;
+		if (RNG() < eat_per_turn)
+		{
+			if (print_crafting)
+			{
+				printf("%s ate a snack\n", citizens[a].name.c_str());
+			}
+			citizens[a].owned_items[SNACKS] -= 1;
+		}
 	}
 	else
 	{
 		citizens[a].needs[SNACKS] = 1;
 	}
 
-	if (citizens[a].owned_items[SMOKES] > smoke_per_turn
-	        && citizens[a].owned_items[LIGHTER] > lighter_used_per_smoke
+	if (citizens[a].owned_items[SMOKES] > 0
+	        && citizens[a].owned_items[LIGHTER] > 0
 	   )
 	{
-		citizens[a].owned_items[SMOKES] -= smoke_per_turn;
-		citizens[a].owned_items[LIGHTER] -= lighter_used_per_smoke;
 
-		citizens[a].needs[SMOKES] = 0;
-		citizens[a].needs[LIGHTER] = 0;
+		citizens[a].needs[SMOKES] = 1;
+		citizens[a].needs[LIGHTER] = 1;
+		if (RNG() < smoke_per_turn)
+		{
+			if (print_crafting)
+			{
+				printf("%s smoked a cigarette\n", citizens[a].name.c_str());
+			}
+			citizens[a].owned_items[SMOKES] -= 1;
+			citizens[a].owned_items[LIGHTER] -= 1;
+		}
+
 	}
 	else
 	{
-		if (citizens[a].owned_items[SMOKES] < smoke_per_turn)
+		if (citizens[a].owned_items[SMOKES] < 1)
 		{
 			citizens[a].needs[SMOKES] = 1;
 		}
 
-		if (citizens[a].owned_items[LIGHTER] < lighter_used_per_smoke)
+		if (citizens[a].owned_items[LIGHTER] < 1)
 		{
 			citizens[a].needs[LIGHTER] = 1;
 		}
 	}
 
-	if (citizens[a].owned_items[BOOZE] > drink_per_turn)
+	if (citizens[a].owned_items[BOOZE] > 0)
 	{
-		citizens[a].owned_items[BOOZE] -= drink_per_turn;
-		citizens[a].needs[BOOZE] = 0;
+
+		citizens[a].needs[BOOZE] = 1;
+		if (RNG() < drink_per_turn)
+		{
+			if (print_crafting)
+			{
+				printf("%s drank a drink\n", citizens[a].name.c_str());
+			}
+			citizens[a].owned_items[BOOZE] -= 1;
+		}
 	}
 	else
 	{
@@ -548,17 +876,17 @@ void eat_breathe_etc(int a)
 	}
 
 
-}
 
 
 
-void craft(int a)
-{
 
 
-	if ( (citizens[a].owned_items[FILTERS] >= 1 )
-	        && (citizens[a].owned_items[SPIN] >= 1 )
-	        && (citizens[a].owned_items[PAPERS] >= 1 ))
+
+
+
+	if ( (citizens[a].owned_items[FILTERS] > 0 )
+	        && (citizens[a].owned_items[SPIN] > 0 )
+	        && (citizens[a].owned_items[PAPERS] > 0 ))
 	{
 		citizens[a].owned_items[FILTERS] -= 1;
 		citizens[a].owned_items[SPIN] -= 1;
@@ -566,7 +894,14 @@ void craft(int a)
 
 		citizens[a].owned_items[SMOKES] += 1;
 
-		// printf("citizen %i rolled a smoke\n", a);
+
+		citizens[a].needs[FILTERS] = 0;
+		citizens[a].needs[SPIN] = 0;
+		citizens[a].needs[PAPERS] = 0;
+		if (print_crafting)
+		{
+			printf("%s rolled a smoke\n", citizens[a].name.c_str());
+		}
 
 	}
 	else
@@ -582,12 +917,15 @@ void craft(int a)
 }
 
 
+
+
+
 void update_position_based_on_needs(int a)
 {
 
 	// what is the biggest need?
 	int biggest_need = NONE;
-	float need_amount = 0.0f;
+	float biggest_need_amount = 0.0f;
 	int biggest_need_source = -1;
 
 
@@ -597,15 +935,17 @@ void update_position_based_on_needs(int a)
 
 	for (int i = 0; i < n_trade_goods; ++i)
 	{
-		if (citizens[a].needs[i] > need_amount
-		   )
+		if (i != NONE)
 		{
-			biggest_need = i;
-			need_amount = citizens[a].needs[i];
 
-			if (citizens[a].sources[i] > -1)
+			float need_this = citizens[a].needs[i] - citizens[a].owned_items[i];
+			if (need_this > biggest_need_amount
+			   )
 			{
+				biggest_need = i;
+				biggest_need_amount = citizens[a].needs[i];
 				biggest_need_source = citizens[a].sources[i];
+
 			}
 		}
 	}
@@ -613,6 +953,7 @@ void update_position_based_on_needs(int a)
 	// where are the known sources of this?
 	if (biggest_need != NONE && biggest_need_source != NONE && biggest_need_source > -1)
 	{
+		// printf("need %s. moving to source\n", item_names[biggest_need].c_str());
 		destination_x = citizens[  biggest_need_source ].position_x;
 		destination_y = citizens[  biggest_need_source ].position_y;
 		go = true;
@@ -623,14 +964,18 @@ void update_position_based_on_needs(int a)
 
 		// if you don't need anything, go hang out with a friend
 
+		// printf("hang out with a friend.\n");
 		int best_friend = -1;
 		float likes_best_friend = 0.0f;
 		for (int i = 0; i < population_size; ++i)
 		{
-			if (citizens[a].likes[i] > likes_best_friend)
+			if (!citizens[i].is_a_location)
 			{
-				best_friend = i;
-				likes_best_friend = citizens[a].likes[i];
+				if (citizens[a].likes[i] > likes_best_friend)
+				{
+					best_friend = i;
+					likes_best_friend = citizens[a].likes[i];
+				}
 			}
 		}
 
@@ -645,6 +990,7 @@ void update_position_based_on_needs(int a)
 
 	else if (biggest_need != NONE && biggest_need_source == -1)
 	{
+		// printf("talk to a random person\n");
 
 		// you need something, but don't know where to get it
 
@@ -671,23 +1017,25 @@ void update_position_based_on_needs(int a)
 
 		if (go )
 		{
+
+			// printf("moving to destination\n");
 			if (destination_x > citizens[a].position_x)
 			{
-				citizens[a].position_x++;
+				citizens[a].position_x -= (xorshift32() % 2) - 1;
 			}
 			else if (destination_x < citizens[a].position_x)
 			{
-				citizens[a].position_x--;
+				citizens[a].position_x += (xorshift32() % 2) - 1;
 			}
 
 
 			if (destination_y > citizens[a].position_y)
 			{
-				citizens[a].position_y++;
+				citizens[a].position_y -= (xorshift32() % 2) - 1;
 			}
 			else if (destination_y < citizens[a].position_y)
 			{
-				citizens[a].position_y--;
+				citizens[a].position_y += (xorshift32() % 2) - 1;
 			}
 
 		}
@@ -695,6 +1043,7 @@ void update_position_based_on_needs(int a)
 		else
 		{
 
+			// printf("just kind of milling around.\n");
 			citizens[a].position_x += (xorshift32() % 3) - 1;
 			citizens[a].position_y += (xorshift32() % 3) - 1;
 		}
@@ -720,6 +1069,7 @@ void do_location_stuff(int i)
 	if (!citizens[i].name.compare(location_names[0]))
 	{
 		citizens[i].owned_items[BOOZE] = 100;
+		citizens[i].prices[BOOZE] = 10.0f;
 
 
 	}
@@ -728,14 +1078,21 @@ void do_location_stuff(int i)
 		citizens[i].owned_items[FILTERS] = 100;
 		citizens[i].owned_items[PAPERS] = 100;
 		citizens[i].owned_items[SPIN] = 100;
+
+
+		citizens[i].prices[FILTERS] = 1.0f;
+		citizens[i].prices[PAPERS] = 1.0f;
+		citizens[i].prices[SPIN] = 1.0f;
 	}
 	if (!citizens[i].name.compare(location_names[2]))
 	{
 		citizens[i].owned_items[SNACKS] = 100;
+		citizens[i].prices[SNACKS] = 1.0f;
 	}
 	if (!citizens[i].name.compare(location_names[3]))
 	{
 		citizens[i].owned_items[BOOZE] = 100;
+		citizens[i].prices[BOOZE] = 1.0f;
 	}
 
 
@@ -749,6 +1106,20 @@ void update()
 {
 	for (int i = 0; i < population_size; ++i)
 	{
+		if (print_stats)
+		{
+			printf("%s's turn\n", citizens[i].name.c_str());
+			for (int j = 0; j < n_trade_goods; ++j)
+			{
+				if (j != NONE)
+				{
+					printf("	has %s %f, needs %f. Source %i\n", item_names[j].c_str(), citizens[i].owned_items[j], citizens[i].needs[j], citizens[i].sources[j]);
+				}
+			}
+		}
+
+
+
 		int met_with = -1;//(xorshift32() % population_size) ;
 
 		citizens[i].chatted_this_turn = false;
@@ -778,24 +1149,27 @@ void update()
 		{
 
 
-			citizens[i].owned_items[CASH] += 0.5f;
+			// citizens[i].owned_items[CASH] += 0.5f;
 
 
 			if (met_with != -1)
 			{
 
-				trade(i, met_with);
 
 				if (! citizens[met_with].is_a_location)
 				{
 					gossip(i, met_with);
 				}
 
+				trade(i, met_with);
+
+
+
 
 			}
 
 
-			craft(i);
+			// craft(i);
 			eat_breathe_etc(i);
 			update_position_based_on_needs(i);
 
@@ -934,7 +1308,11 @@ int main ()
 	{
 		// printf("turn %i\n", i);
 		update();
-		camera();
+
+		if (print_camera)
+		{
+			camera();
+		}
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
