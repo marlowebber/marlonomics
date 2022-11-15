@@ -232,6 +232,59 @@ const int population_size = n_person_names + n_location_names;
 
 
 
+struct Recipe()
+{
+	// this generically describes the exchange of some goods for another, and is used for crafting as well as interpersonal agreements and debts.
+
+	float in[n_trade_goods];
+	float out[n_trade_goods];
+
+	Recipe()
+	{
+		for (int i = 0; i < n_trade_goods; ++i)
+		{
+			this->in[i] = 0.0f;
+			this->out[i] = 0.0f;
+		}
+	}
+}
+
+
+
+Recipe crafting_recipes(int product)
+{
+
+	switch (product)
+	{
+
+
+	case SMOKES:
+	{
+		Recipe recipe_smokes = Recipe();
+
+		recipe_smokes.in[FILTERS] = 1.0f;
+		recipe_smokes.in[PAPERS] = 1.0f;
+		recipe_smokes.in[SPIN] = 1.0f;
+
+		recipe_smokes.out[SMOKES] = 1.0f;
+
+		return recipe_smokes;
+	}
+
+
+
+	}
+
+	return Recipe();
+}
+
+
+
+
+
+
+
+
 // std::string float_to_string_very(float in)
 // {
 
@@ -300,7 +353,7 @@ struct Citizen
 	float needs[n_trade_goods];
 	float likes[population_size];
 	float knows[population_size];
-	float owes[population_size];
+	Recipe agreements[population_size];
 
 	int sources[n_trade_goods];
 	float source_prices[n_trade_goods];
@@ -321,6 +374,8 @@ struct Citizen
 	std::string name;
 
 	bool is_a_location;
+
+
 
 
 
@@ -377,23 +432,26 @@ const float smoke_per_turn = 0.005f;
 
 void eat_breathe_etc(int a)
 {
-	if (citizens[a].owned_items[SNACKS] > 0)
+
+	if (RNG() < eat_per_turn)
 	{
-		if (RNG() < eat_per_turn)
+		if (citizens[a].owned_items[SNACKS] > 0)
 		{
+
 			if (print_crafting  && (pac || (a == pc))  )
 			{
 				printf("%s ate a snack\n", citizens[a].name.c_str());
 			}
 			citizens[a].owned_items[SNACKS] -= 1;
 		}
+
 	}
 
-	if (citizens[a].owned_items[SMOKES] > 0
-	        && citizens[a].owned_items[LIGHTER] > 0
-	   )
+	if (RNG() < smoke_per_turn)
 	{
-		if (RNG() < smoke_per_turn)
+		if (citizens[a].owned_items[SMOKES] > 0
+		        && citizens[a].owned_items[LIGHTER] > 0
+		   )
 		{
 			if (print_crafting  && (pac || (a == pc)))
 			{
@@ -402,11 +460,23 @@ void eat_breathe_etc(int a)
 			citizens[a].owned_items[SMOKES] -= 1;
 			citizens[a].owned_items[LIGHTER] -= 1;
 		}
+		// else
+		// {
+
+		// 	if (citizens[a].owned_items[SMOKES] <= 0 )
+		// 	{
+		// 		citizens[a].needs[SMOKES] += 1;
+		// 	}
+		// 	if (citizens[a].owned_items[LIGHTER] <= 0 )
+		// 	{
+		// 		citizens[a].needs[LIGHTER] += 1;
+		// 	}
+		// }
 	}
 
-	if (citizens[a].owned_items[BOOZE] > 0)
+	if (RNG() < drink_per_turn)
 	{
-		if (RNG() < drink_per_turn)
+		if (citizens[a].owned_items[BOOZE] > 0)
 		{
 			if (print_crafting  && (pac || (a == pc)))
 			{
@@ -414,6 +484,10 @@ void eat_breathe_etc(int a)
 			}
 			citizens[a].owned_items[BOOZE] -= 1;
 		}
+		// else
+		// {
+		// 	citizens[a].needs[BOOZE] += 1;
+		// }
 	}
 }
 
@@ -432,17 +506,36 @@ void needs_controller(int a)
 		citizens[a].needs[i] = 0.0;
 	}
 
-	for (int i = 0; i < n_trade_goods; ++i)
+
+	for (int j = 0; j < population_size; ++j)
 	{
-		for (int j = 0; j < population_size; ++j)
+		for (int i = 0; i < n_trade_goods; ++i)
 		{
-			citizens[a].needs[i] += citizens[a].owes[i];
+			citizens[a].needs[i] += citizens[a].agreements[j].in[i];
 		}
 	}
 
+	// if you need something which can be made from component parts, compile a list of those parts and seek them out as well.
+	// you might end up with a surplus of stuff, but hey, it gets you there in the end.
 
-	// if you need something which can be made from component parts, compile a list of those parts and seek them out.
+	for (int i = 0; i < n_trade_goods; ++i)
+	{
+		if (citizens[a].needs[i] > 0.0f)
+		{
 
+			Recipe item_recipe = crafting_recipes(i);
+			if ( item_recipe.product != -1  )
+			{
+				for (int j = 0; j < n_trade_goods; ++j)
+				{
+					if (item_recipe.ingredients[j] > 0.0f)
+					{
+						citizens[a].needs[j] += item_recipe.ingredients[j];
+					}
+				}
+			}
+		}
+	}
 
 	eat_breathe_etc(a);
 
@@ -1422,14 +1515,65 @@ void update(int turn)
 				}
 
 
+				bool have_all_items = true;
+				bool owe_any_items  = false;
+				for (int j = 0; j < n_trade_goods; ++j)
+				{
+					if (citizens[i].agreements[met_with].in[j] > 0.0f)
+					{
+						owe_any_items = true;
+						if (citizens[i].owned_items[j] < citizens[i].agreements[met_with].in[j] )
+						{
+							have_all_items = false;
+						}
+					}
+				}
+
+				// give owed items and receive reward, if applicable.
+				if (owe_any_items && have_all_items)
+				{
+					for (int j = 0; j < n_trade_goods; ++j)
+					{
+						citizens[met_with].owned_items[j] += citizens[i].agreements[met_with].in[j];
+						citizens[i].owned_items[j]        -= citizens[i].agreements[met_with].in[j];
+
+
+						if (citizens[met_with].owned_items[j] > citizens[i].agreements[met_with].out[j])
+						{
+							citizens[i].owned_items[j] += citizens[i].agreements[met_with].out[j];
+							citizens[met_with].owned_items[j] -= citizens[i].agreements[met_with].out[j];
+						}
+						else
+						{
+							// if b doesn't have enough to pay a what they agreed, b now owes a something!
+							float indebted_amount = citizens[i].agreements[met_with].out[j] - citizens[met_with].owned_items[j] ;
+
+							citizens[i].owned_items[j]        +=  citizens[met_with].owned_items[j];
+							citizens[met_with].owned_items[j] -=  citizens[met_with].owned_items[j] ;
+
+
+							citizens[met_with].agreements[i].in[j] += indebted_amount;
+
+						}
+					}
+
+				}
+
 
 				for (int j = 0; j < n_trade_goods; ++j)
 				{
+
+
+
+
+
 					if (citizens[i].needs[j] > 0.0f)
 					{
 
 						trade(i, met_with, j, citizens[i].needs[j] );
 					}
+
+
 
 
 				}
